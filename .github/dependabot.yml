@@ -6,9 +6,16 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
-      all-deps:
+      # Group only safe minor/patch bumps so they can auto-merge.
+      minor-and-patch:
         patterns: ['*']
+        update-types: ['minor', 'patch']
+    # Majors come as individual PRs (they often carry breaking changes and
+    # need a deliberate migration, e.g. Next 16 / TypeScript 6).
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
