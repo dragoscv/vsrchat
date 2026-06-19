@@ -20,19 +20,31 @@ vsrchat publishes to both the **VS Code Marketplace** and **Open VSX**.
 2. Generate an access token; store it as the repo secret `OVSX_KEY` (mapped to
    the `OVSX_PAT` env var at publish time).
 
-## Releasing
+## Releasing (automatic)
 
-1. Bump `apps/extension/package.json` version and update its `CHANGELOG.md`
-   (the pre-commit gate enforces this).
-2. Tag and push:
+Publishing is **fully automatic and version-driven**. To cut a release you only
+bump the version:
 
-   ```bash
-   git tag ext-v0.1.0
-   git push origin ext-v0.1.0
-   ```
+1. Bump `apps/extension/package.json` `version` and add a `CHANGELOG.md` entry
+    (the pre-commit gate enforces this).
+2. Commit and push to `main`.
 
-3. `release-extension.yml` builds, packages the `.vsix`, and publishes to both
-   marketplaces, then creates a GitHub Release with the VSIX attached.
+That's it. The `release-extension.yml` workflow then:
+
+- **Only runs** when files under `apps/extension/`, `packages/protocol/`, or
+   `packages/crypto/` change (path-filtered) — unrelated pushes don't trigger it.
+- A **gate job** checks whether a `ext-v<version>` tag already exists. If the
+   version is unchanged, it **skips** (no publish, no wasted minutes). If the
+   version is new, it proceeds.
+- Builds, packages the `.vsix`, and publishes to the **VS Marketplace** and
+   **Open VSX** (each step skips itself if that registry already has the version).
+- **Creates and pushes the `ext-v<version>` git tag** and a **GitHub Release**
+   with the VSIX attached — only after the marketplaces accept the version.
+
+### Forcing a release
+
+Run the workflow manually from the Actions tab (**Run workflow → force: true**)
+to re-publish even when the version is unchanged.
 
 ## Manual publish (fallback)
 

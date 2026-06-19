@@ -2,9 +2,19 @@ name: Release extension
 
 on:
   push:
-    tags:
-      - 'ext-v*'
+    branches: [main]
+    # Only consider running when something that affects the extension changes.
+    paths:
+      - 'apps/extension/**'
+      - 'packages/protocol/**'
+      - 'packages/crypto/**'
+      - '.github/workflows/release-extension.yml'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Publish even if the version is unchanged'
+        type: boolean
+        default: false
 
 concurrency:
   group: release-extension
@@ -14,12 +24,58 @@ permissions:
   contents: write
 
 jobs:
+  # ── Gate ──────────────────────────────────────────────────────────────
+  # Decide whether to publish. We only publish when the extension version in
+  # package.json is new (no matching git tag yet), so ordinary code pushes that
+  # bump deps but not the version won't trigger a release. A manual run can force.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      should_publish: ${{ steps.decide.outputs.should_publish }}
+      version: ${{ steps.decide.outputs.version }}
+      tag: ${{ steps.decide.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether to release
+        id: decide
+        env:
+          FORCE: ${{ github.event.inputs.force }}
+        run: |
+          version=$(node -p "require('./apps/extension/package.json').version")
+          tag="ext-v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          if [ "$FORCE" = "true" ]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Force requested — will publish $tag."
+            exit 0
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Tag $tag already exists — version unchanged, nothing to release."
+          else
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::New version $version detected — will tag and publish $tag."
+          fi
+
+  # ── Publish ───────────────────────────────────────────────────────────
   publish:
+    needs: gate
+    if: needs.gate.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
     env:
       HAS_OVSX: ${{ secrets.OVSX_KEY != '' }}
+      VERSION: ${{ needs.gate.outputs.version }}
+      TAG: ${{ needs.gate.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
 
@@ -39,10 +95,8 @@ jobs:
         run: |
           name=$(node -p "require('./package.json').name")
           publisher=$(node -p "require('./package.json').publisher")
-          version=$(node -p "require('./package.json').version")
           echo "name=$name" >> "$GITHUB_OUTPUT"
           echo "publisher=$publisher" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "id=$publisher.$name" >> "$GITHUB_OUTPUT"
 
       - name: Package VSIX
@@ -59,10 +113,9 @@ jobs:
         id: vsce_check
         env:
           EXT_ID: ${{ steps.pkg.outputs.id }}
-          EXT_VERSION: ${{ steps.pkg.outputs.version }}
         run: |
           npx --yes @vscode/vsce show "$EXT_ID" --json > /tmp/marketplace.json 2>/dev/null || true
-          published=$(node -e '
+          published=$(EXT_VERSION="$VERSION" node -e '
             try {
               const fs = require("fs");
               const raw = fs.readFileSync("/tmp/marketplace.json", "utf8").trim();
@@ -73,7 +126,7 @@ jobs:
             } catch { console.log("no"); }
           ')
           echo "published=$published" >> "$GITHUB_OUTPUT"
-          echo "::notice::Marketplace has $EXT_ID@$EXT_VERSION: $published"
+          echo "::notice::Marketplace has $EXT_ID@$VERSION: $published"
 
       - name: Publish to VS Marketplace
         if: steps.vsce_check.outputs.published == 'no'
@@ -95,7 +148,7 @@ jobs:
 
       - name: Skip VS Marketplace (already published)
         if: steps.vsce_check.outputs.published == 'yes'
-        run: echo "::notice::${{ steps.pkg.outputs.id }}@${{ steps.pkg.outputs.version }} already on Marketplace — skipping."
+        run: echo "::notice::${{ steps.pkg.outputs.id }}@$VERSION already on Marketplace — skipping."
 
       - name: Ensure Open VSX namespace exists
         if: env.HAS_OVSX == 'true'
@@ -106,16 +159,14 @@ jobs:
       - name: Check Open VSX for existing version
         id: ovsx_check
         if: env.HAS_OVSX == 'true'
-        env:
-          EXT_VERSION: ${{ steps.pkg.outputs.version }}
         run: |
-          status=$(curl -s -o /dev/null -w "%{http_code}" "https://open-vsx.org/api/${{ steps.pkg.outputs.publisher }}/${{ steps.pkg.outputs.name }}/$EXT_VERSION")
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://open-vsx.org/api/${{ steps.pkg.outputs.publisher }}/${{ steps.pkg.outputs.name }}/$VERSION")
           if [ "$status" = "200" ]; then
             echo "published=yes" >> "$GITHUB_OUTPUT"
           else
             echo "published=no" >> "$GITHUB_OUTPUT"
           fi
-          echo "::notice::Open VSX HTTP $status for $EXT_VERSION"
+          echo "::notice::Open VSX HTTP $status for $VERSION"
 
       - name: Publish to Open VSX
         if: env.HAS_OVSX == 'true' && steps.ovsx_check.outputs.published == 'no'
@@ -125,9 +176,24 @@ jobs:
         run: npx --yes ovsx publish vsrchat.vsix
         continue-on-error: true
 
+      # Tag the released commit and publish a GitHub Release only after the
+      # marketplaces accepted the version. The tag both records the release and
+      # prevents this workflow from re-publishing the same version next push.
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::notice::Tag $TAG already exists — skipping tag creation."
+          else
+            git tag -a "$TAG" -m "Release extension $VERSION"
+            git push origin "$TAG"
+          fi
+
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ env.TAG }}
+          name: VS Remote Chat ${{ env.VERSION }}
           files: apps/extension/vsrchat.vsix
           generate_release_notes: true
