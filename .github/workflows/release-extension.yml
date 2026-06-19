@@ -30,8 +30,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Build extension
-        run: pnpm --filter vsrchat build
+      - name: Build extension (with workspace deps)
+        run: pnpm --filter vsrchat... build
 
       - name: Read package metadata
         id: pkg
