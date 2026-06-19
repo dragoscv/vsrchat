@@ -5,6 +5,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- Pairing/connection no longer gets stuck with
+  "WebSocket was closed before the connection was established". A still-connecting
+  socket that is superseded (auto-connect then re-pair) is now torn down safely
+  and the benign error is suppressed. The extension relay client now also
+  **auto-reconnects** with exponential backoff if the connection drops.
+
 ### Added
 
 - Sessions are now tagged with their **workspace** (name, path, stable id, and

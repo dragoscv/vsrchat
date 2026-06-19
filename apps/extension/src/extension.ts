@@ -151,10 +151,16 @@ class Controller {
     this.relay.on('error', ({ message }) => {
       void vscode.window.showErrorMessage(`vsrchat relay: ${message}`);
     });
-    this.relay.on('closed', () => this.setStatus('idle'));
+    this.relay.on('closed', () => {
+      // The client auto-reconnects unless we closed it deliberately.
+      this.setStatus(this.relay?.wasClosedByUs() ? 'idle' : 'connecting');
+    });
 
     this.relay.connect();
-    if (this.cfg<boolean>('mirrorRealSessions', true)) this.sessions.startWatching();
+    if (this.cfg<boolean>('mirrorRealSessions', true)) {
+      this.sessions.dispose(); // avoid stacking watchers across reconnects
+      this.sessions.startWatching();
+    }
   }
 
   /** Complete ECDH once the phone announces its public key. */

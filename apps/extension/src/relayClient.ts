@@ -41,6 +41,8 @@ export class RelayClient extends EventEmitter<Events> {
   private seq = 0;
   private closedByUs = false;
   private key?: CryptoKey;
+  private backoff = 1000;
+  private reconnectTimer?: ReturnType<typeof setTimeout>;
 
   constructor(private readonly opts: RelayClientOptions) {
     super();
@@ -58,6 +60,12 @@ export class RelayClient extends EventEmitter<Events> {
 
   connect(): void {
     this.closedByUs = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+    // Tear down any previous socket without surfacing benign errors.
+    this.teardownSocket();
     const ws = new WebSocket(this.opts.relayUrl);
     this.ws = ws;
 
@@ -79,12 +87,48 @@ export class RelayClient extends EventEmitter<Events> {
     });
 
     ws.on('close', (code, reason) => {
+      if (ws !== this.ws) return; // stale socket
       this.emit('closed', { code, reason: reason.toString() });
+      if (!this.closedByUs) this.scheduleReconnect();
     });
 
     ws.on('error', (err) => {
-      this.emit('error', { code: 'ws-error', message: String(err) });
+      if (ws !== this.ws) return; // stale socket, ignore
+      const message = err instanceof Error ? err.message : String(err);
+      // Benign: happens when a still-connecting socket is closed (e.g. a
+      // reconnect or re-pair superseded it). Don't surface to the user.
+      if (/closed before the connection is established/i.test(message)) return;
+      this.emit('error', { code: 'ws-error', message });
     });
+  }
+
+  private scheduleReconnect(): void {
+    if (this.closedByUs || this.reconnectTimer) return;
+    const delay = Math.min(this.backoff, 15000);
+    this.backoff *= 2;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = undefined;
+      if (!this.closedByUs) this.connect();
+    }, delay);
+  }
+
+  /** Detach handlers and close/terminate the current socket safely. */
+  private teardownSocket(): void {
+    const ws = this.ws;
+    if (!ws) return;
+    this.ws = undefined;
+    ws.removeAllListeners();
+    // Swallow any late error from terminating a connecting socket.
+    ws.on('error', () => {});
+    try {
+      if (ws.readyState === WebSocket.CONNECTING) {
+        ws.terminate();
+      } else {
+        ws.close(1000, 'client-close');
+      }
+    } catch {
+      /* ignore */
+    }
   }
 
   private async handle(raw: string): Promise<void> {
@@ -96,6 +140,7 @@ export class RelayClient extends EventEmitter<Events> {
     }
     const obj = parsed as { t?: string };
     if (obj.t === 'joined') {
+      this.backoff = 1000; // healthy connection — reset backoff
       // Only safe to send after the (async) join is accepted by the relay.
       this.sendKeyExchange();
       return void this.emit('joined', { peers: (parsed as { peers: number }).peers });
@@ -160,13 +205,16 @@ export class RelayClient extends EventEmitter<Events> {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
-  close(): void {
-    this.closedByUs = true;
-    this.ws?.close(1000, 'client-close');
-    this.ws = undefined;
-  }
-
   wasClosedByUs(): boolean {
     return this.closedByUs;
+  }
+
+  close(): void {
+    this.closedByUs = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+    this.teardownSocket();
   }
 }
