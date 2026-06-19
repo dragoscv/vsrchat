@@ -36,7 +36,7 @@
     "@vsrchat/config": "workspace:*",
     "eslint": "^9.17.0",
     "eslint-config-next": "^15.1.3",
-    "sharp": "^0.33.5",
+    "sharp": "^0.35.1",
     "tailwindcss": "^4.0.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
