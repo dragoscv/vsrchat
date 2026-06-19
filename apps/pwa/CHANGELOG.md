@@ -4,6 +4,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Sessions are **grouped by workspace** in the list (active workspace first,
+  collapsible groups, session counts) and the conversation header shows which
+  workspace a chat belongs to.
+
+### Fixed
+
+- Use the correct canonical domain `https://vsrchat.dragoscatalin.ro` (default
+  VAPID subject, links). The `*.vercel.app` URL now redirects to it.
+
 ### Changed
 
 - Upgraded to latest stable dependencies: Next.js 16, React 19.2, Motion 12,

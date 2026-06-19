@@ -34,7 +34,7 @@ class Controller {
   private readonly sessions: SessionStore;
   private relay?: RelayClient;
   private status: vscode.StatusBarItem;
-  private pwaBaseUrl = 'https://vsrchat.app';
+  private pwaBaseUrl = 'https://vsrchat.dragoscatalin.ro';
 
   constructor(context: vscode.ExtensionContext) {
     this.pairingMgr = new PairingManager(context);
@@ -216,7 +216,14 @@ class Controller {
   }
 
   private pushSessions(): void {
-    const managed = this.chat.listSummaries();
+    const ws = currentWorkspace();
+    const managed = this.chat.listSummaries().map((s) => ({
+      ...s,
+      workspace: ws.name,
+      workspaceId: ws.id,
+      workspacePath: ws.path,
+      isActiveWorkspace: true,
+    }));
     const mirrored = this.cfg<boolean>('mirrorRealSessions', true)
       ? this.sessions.listSummaries()
       : [];
@@ -290,4 +297,21 @@ class Controller {
     this.sessions.dispose();
     this.status.dispose();
   }
+}
+
+/** Identify the workspace currently focused in this VS Code window. */
+function currentWorkspace(): { id?: string; name: string; path?: string } {
+  const wsFile = vscode.workspace.workspaceFile;
+  if (wsFile && wsFile.scheme !== 'untitled') {
+    const base = wsFile.path.split('/').pop() ?? 'workspace';
+    return {
+      name: base.replace(/\.code-workspace$/i, '') + ' (workspace)',
+      path: wsFile.fsPath,
+    };
+  }
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (folder) {
+    return { name: folder.name, path: folder.uri.fsPath };
+  }
+  return { name: 'No workspace' };
 }

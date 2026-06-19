@@ -5,6 +5,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Sessions are now tagged with their **workspace** (name, path, stable id, and
+  whether it's the currently focused window), so chats from different VS Code
+  windows are correctly differentiated.
+
+### Fixed
+
+- Pairing deep links now point at the correct PWA domain
+  `https://vsrchat.dragoscatalin.ro`.
+
 ### Changed
 
 - Upgraded to latest stable dependencies: TypeScript 6, `@noble/curves` 2 +

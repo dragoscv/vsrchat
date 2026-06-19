@@ -1,7 +1,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import type { ChatMessage, SessionDetail, SessionSummary } from '@vsrchat/protocol';
+import type { SessionDetail, SessionSummary } from '@vsrchat/protocol';
+import { parseSession, readWorkspaceMeta, uriEquals } from './sessionParse.js';
+
+// Re-export pure helpers (kept here for backwards-compatible imports/tests).
+export { parseSession, decodeUriPath, basenameFromPath } from './sessionParse.js';
 
 /**
  * Reads (mirrors) the real Copilot Chat sessions that VS Code persists on disk.
@@ -20,40 +24,69 @@ export class SessionStore {
     private readonly onChange: () => void,
   ) {}
 
-  /** Candidate directories that may hold chat session JSON files. */
-  private chatSessionDirs(): string[] {
-    const dirs: string[] = [];
+  /** The workspaceStorage hash for the currently focused workspace, if known. */
+  private activeWorkspaceId(): string | undefined {
     // globalStorageUri => <user>/User/globalStorage/<publisher.ext>
-    // We climb to the User dir, then look at workspaceStorage/*/chatSessions and
-    // User/chatSessions / User/chatEditingSessions.
+    // workspaceStorage entries sit at <user>/User/workspaceStorage/<hash>.
+    // We match the current workspace folder against each <hash>/workspace.json.
+    const folders = vscode.workspace.workspaceFolders;
+    const wsFile = vscode.workspace.workspaceFile?.toString();
+    const target = wsFile ?? folders?.[0]?.uri.toString();
+    if (!target) return undefined;
+    for (const src of this.chatSessionSources()) {
+      if (src.workspaceUri && uriEquals(src.workspaceUri, target)) return src.workspaceId;
+    }
+    return undefined;
+  }
+
+  /**
+   * Discover every chat-session directory together with the workspace it
+   * belongs to. Reads <hash>/workspace.json to recover the folder/workspace URI.
+   */
+  private chatSessionSources(): ChatSessionSource[] {
+    const sources: ChatSessionSource[] = [];
     const globalStorage = this.context.globalStorageUri.fsPath;
     const userDir = path.resolve(globalStorage, '..', '..'); // .../User
-    const candidates = [
-      path.join(userDir, 'workspaceStorage'),
-      path.join(userDir, 'chatSessions'),
-    ];
-    for (const base of candidates) {
-      if (!safeExists(base)) continue;
-      if (path.basename(base) === 'chatSessions') {
-        dirs.push(base);
-        continue;
-      }
-      // workspaceStorage/<hash>/chatSessions
-      for (const entry of safeReaddir(base)) {
-        const sub = path.join(base, entry, 'chatSessions');
-        if (safeExists(sub)) dirs.push(sub);
-      }
+
+    // Per-workspace sessions: workspaceStorage/<hash>/chatSessions
+    const wsBase = path.join(userDir, 'workspaceStorage');
+    for (const hash of safeReaddir(wsBase)) {
+      const hashDir = path.join(wsBase, hash);
+      const sub = path.join(hashDir, 'chatSessions');
+      if (!safeExists(sub)) continue;
+      const ws = readWorkspaceMeta(path.join(hashDir, 'workspace.json'));
+      sources.push({
+        dir: sub,
+        workspaceId: hash,
+        workspaceUri: ws?.uri,
+        workspaceName: ws?.name ?? 'Unknown workspace',
+        workspacePath: ws?.fsPath,
+      });
     }
-    return dirs;
+
+    // Empty-window / global sessions: User/chatSessions (no workspace).
+    const globalChat = path.join(userDir, 'chatSessions');
+    if (safeExists(globalChat)) {
+      sources.push({
+        dir: globalChat,
+        workspaceId: undefined,
+        workspaceUri: undefined,
+        workspaceName: 'No workspace',
+        workspacePath: undefined,
+      });
+    }
+
+    return sources;
   }
 
   /** Read all mirrored sessions (summaries only). */
   listSummaries(): SessionSummary[] {
     const out: SessionSummary[] = [];
-    for (const dir of this.chatSessionDirs()) {
-      for (const file of safeReaddir(dir)) {
+    const activeId = this.activeWorkspaceId();
+    for (const src of this.chatSessionSources()) {
+      for (const file of safeReaddir(src.dir)) {
         if (!file.endsWith('.json')) continue;
-        const detail = this.readFile(path.join(dir, file));
+        const detail = this.readFile(path.join(src.dir, file));
         if (detail) {
           out.push({
             id: detail.id,
@@ -61,7 +94,10 @@ export class SessionStore {
             updatedAt: detail.updatedAt,
             messageCount: detail.messages.length,
             source: 'mirror',
-            workspace: detail.workspace,
+            workspace: src.workspaceName,
+            workspaceId: src.workspaceId,
+            workspacePath: src.workspacePath,
+            isActiveWorkspace: !!src.workspaceId && src.workspaceId === activeId,
           });
         }
       }
@@ -71,11 +107,20 @@ export class SessionStore {
 
   /** Read a single mirrored session in full. */
   getDetail(id: string): SessionDetail | undefined {
-    for (const dir of this.chatSessionDirs()) {
-      for (const file of safeReaddir(dir)) {
+    const activeId = this.activeWorkspaceId();
+    for (const src of this.chatSessionSources()) {
+      for (const file of safeReaddir(src.dir)) {
         if (!file.endsWith('.json')) continue;
-        const detail = this.readFile(path.join(dir, file));
-        if (detail?.id === id) return detail;
+        const detail = this.readFile(path.join(src.dir, file));
+        if (detail?.id === id) {
+          return {
+            ...detail,
+            workspace: src.workspaceName,
+            workspaceId: src.workspaceId,
+            workspacePath: src.workspacePath,
+            isActiveWorkspace: !!src.workspaceId && src.workspaceId === activeId,
+          };
+        }
       }
     }
     return undefined;
@@ -98,9 +143,9 @@ export class SessionStore {
       if (timer) clearTimeout(timer);
       timer = setTimeout(this.onChange, 400);
     };
-    for (const dir of this.chatSessionDirs()) {
+    for (const src of this.chatSessionSources()) {
       try {
-        const w = fs.watch(dir, { persistent: false }, debounced);
+        const w = fs.watch(src.dir, { persistent: false }, debounced);
         this.watchers.push(w);
       } catch {
         /* ignore unwatchable dirs */
@@ -130,81 +175,10 @@ function safeReaddir(p: string): string[] {
   }
 }
 
-/** Defensive parser for the internal chat-session JSON shape. */
-export function parseSession(json: unknown, file: string): SessionDetail | undefined {
-  if (!json || typeof json !== 'object') return undefined;
-  const obj = json as Record<string, unknown>;
-
-  const id = String(obj.sessionId ?? obj.id ?? path.basename(file, '.json'));
-  const requests = (obj.requests ?? obj.messages ?? []) as unknown[];
-  const messages: ChatMessage[] = [];
-
-  for (let i = 0; i < requests.length; i++) {
-    const r = requests[i] as Record<string, unknown> | undefined;
-    if (!r) continue;
-    // user request text
-    const message = r.message as Record<string, unknown> | string | undefined;
-    const userText =
-      typeof message === 'string' ? message : ((message?.text as string) ?? (r.text as string) ?? '');
-    if (userText) {
-      messages.push({
-        id: `${id}-u${i}`,
-        role: 'user',
-        text: userText,
-        createdAt: Number(r.timestamp ?? 0) || Date.now(),
-      });
-    }
-    // assistant response (may be array of parts)
-    const response = r.response as unknown;
-    const respText = extractResponseText(response);
-    if (respText) {
-      messages.push({
-        id: `${id}-a${i}`,
-        role: 'assistant',
-        text: respText,
-        createdAt: Number(r.timestamp ?? 0) || Date.now(),
-      });
-    }
-  }
-
-  const title =
-    (obj.customTitle as string) ||
-    (obj.title as string) ||
-    messages.find((m) => m.role === 'user')?.text.slice(0, 60) ||
-    'Untitled chat';
-
-  let updatedAt = 0;
-  try {
-    updatedAt = fs.statSync(file).mtimeMs;
-  } catch {
-    updatedAt = Date.now();
-  }
-
-  return {
-    id,
-    title,
-    updatedAt,
-    messageCount: messages.length,
-    source: 'mirror',
-    messages,
-  };
-}
-
-function extractResponseText(response: unknown): string {
-  if (!response) return '';
-  if (typeof response === 'string') return response;
-  if (Array.isArray(response)) {
-    return response
-      .map((part) => {
-        if (typeof part === 'string') return part;
-        const p = part as Record<string, unknown>;
-        if (typeof p.value === 'string') return p.value;
-        if (typeof p.text === 'string') return p.text;
-        return '';
-      })
-      .join('');
-  }
-  const r = response as Record<string, unknown>;
-  if (typeof r.value === 'string') return r.value;
-  return '';
+interface ChatSessionSource {
+  dir: string;
+  workspaceId?: string;
+  workspaceUri?: string;
+  workspaceName: string;
+  workspacePath?: string;
 }

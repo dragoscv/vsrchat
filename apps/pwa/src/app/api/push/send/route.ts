@@ -8,7 +8,7 @@ function ensureConfigured(): boolean {
   if (configured) return true;
   const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const priv = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT ?? 'mailto:admin@vsrchat.app';
+  const subject = process.env.VAPID_SUBJECT ?? 'mailto:admin@dragoscatalin.ro';
   if (!pub || !priv) return false;
   webpush.setVapidDetails(subject, pub, priv);
   configured = true;

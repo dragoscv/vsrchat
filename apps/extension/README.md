@@ -21,7 +21,7 @@ messages in plaintext.
 1. Install the extension.
 2. Run **VS Remote Chat: Pair a phone…** from the Command Palette.
 3. Sign in with GitHub when prompted.
-4. Scan the QR code with the [VS Remote Chat PWA](https://vsrchat.app) on your phone.
+4. Scan the QR code with the [VS Remote Chat PWA](https://vsrchat.dragoscatalin.ro) on your phone.
 5. Start chatting from anywhere.
 
 ## Settings

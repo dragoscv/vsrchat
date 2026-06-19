@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSession } from './sessionStore.js';
+import { parseSession, decodeUriPath, basenameFromPath } from './sessionParse.js';
 
 describe('parseSession', () => {
   it('parses requests with message + response array', () => {
@@ -35,5 +35,22 @@ describe('parseSession', () => {
     const json = { requests: [{ message: { text: 'Build me a thing' }, response: 'ok' }] };
     const detail = parseSession(json, 'C:/x/file.json');
     expect(detail?.title).toBe('Build me a thing');
+  });
+});
+
+describe('decodeUriPath', () => {
+  it('decodes a Windows file URI and strips the leading slash', () => {
+    expect(decodeUriPath('file:///e%3A/GitHub/metu-app')).toBe('e:/GitHub/metu-app');
+  });
+
+  it('decodes a POSIX file URI', () => {
+    expect(decodeUriPath('file:///home/user/project')).toBe('/home/user/project');
+  });
+});
+
+describe('basenameFromPath', () => {
+  it('returns the last path segment', () => {
+    expect(basenameFromPath('e:/GitHub/metu-app')).toBe('metu-app');
+    expect(basenameFromPath('/home/user/project/')).toBe('project');
   });
 });

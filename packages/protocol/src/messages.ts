@@ -44,7 +44,14 @@ export const SessionSummarySchema = z.object({
   messageCount: z.number().int().nonnegative(),
   /** 'mirror' = read from the real Copilot panel; 'managed' = a vsrchat vscode.lm session. */
   source: z.enum(['mirror', 'managed']),
+  /** Human-readable workspace name (e.g. the folder name). */
   workspace: z.string().optional(),
+  /** Stable workspace identifier (VS Code workspaceStorage hash). */
+  workspaceId: z.string().optional(),
+  /** Absolute fs path / URI of the workspace folder, for display/tooltip. */
+  workspacePath: z.string().optional(),
+  /** True if this session belongs to the workspace currently focused/open. */
+  isActiveWorkspace: z.boolean().optional(),
 });
 export type SessionSummary = z.infer<typeof SessionSummarySchema>;
 

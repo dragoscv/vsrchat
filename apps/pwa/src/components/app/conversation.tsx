@@ -30,9 +30,19 @@ export function Conversation({ onBack }: { onBack: () => void }) {
     <div className="glass" style={{ borderRadius: 18, height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', gap: 10 }}>
         <button onClick={onBack} className="back">←</button>
-        <strong style={{ fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {detail?.title ?? 'Chat'}
-        </strong>
+        <div style={{ minWidth: 0 }}>
+          <strong style={{ display: 'block', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {detail?.title ?? 'Chat'}
+          </strong>
+          {detail?.workspace && (
+            <span
+              title={detail.workspacePath ?? detail.workspace}
+              style={{ fontSize: 11, color: 'var(--color-fg-dim)', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              {detail.isActiveWorkspace ? '🟢' : '📁'} {detail.workspace}
+            </span>
+          )}
+        </div>
       </div>
 
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'grid', gap: 12, alignContent: 'start' }}>

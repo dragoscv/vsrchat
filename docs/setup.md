@@ -27,7 +27,7 @@ Set `vsrchat.relayUrl` to your relay URL in VS Code settings.
 
 ## 3. Deploy / open the PWA
 
-- Hosted: open `https://vsrchat.app` on your phone and **Add to Home Screen**.
+- Hosted: open `https://vsrchat.dragoscatalin.ro` on your phone and **Add to Home Screen**.
 - Self-host: deploy `apps/pwa` to Vercel; set env from `.env.example`
   (`NEXT_PUBLIC_RELAY_URL`, `AUTH_*`, VAPID keys).
 
