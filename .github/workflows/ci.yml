@@ -14,7 +14,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          # Full history so turbo can diff against the PR base branch.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -25,21 +26,35 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Only build/lint/test packages affected by this PR (fast CI).
+      # Resolve the PR base ref so turbo can scope to affected packages.
+      - name: Resolve affected filter
+        id: scope
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          base="${BASE_REF:-main}"
+          git fetch --no-tags --depth=1 origin "$base" || true
+          if git rev-parse --verify --quiet "origin/$base" >/dev/null; then
+            echo "filter=...[origin/$base]" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Base ref origin/$base not found — running all packages."
+            echo "filter=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Typecheck (affected)
-        run: pnpm turbo run typecheck --filter='...[origin/main]'
+        run: pnpm turbo run typecheck ${{ steps.scope.outputs.filter && format('--filter={0}', steps.scope.outputs.filter) || '' }}
 
       - name: Lint (affected)
-        run: pnpm turbo run lint --filter='...[origin/main]'
+        run: pnpm turbo run lint ${{ steps.scope.outputs.filter && format('--filter={0}', steps.scope.outputs.filter) || '' }}
 
       - name: Test (affected)
-        run: pnpm turbo run test --filter='...[origin/main]'
+        run: pnpm turbo run test ${{ steps.scope.outputs.filter && format('--filter={0}', steps.scope.outputs.filter) || '' }}
 
       - name: Build (affected)
         env:
           SKIP_ENV_VALIDATION: '1'
           AUTH_SECRET: ci-placeholder-secret-0000000000000000
-        run: pnpm turbo run build --filter='...[origin/main]'
+        run: pnpm turbo run build ${{ steps.scope.outputs.filter && format('--filter={0}', steps.scope.outputs.filter) || '' }}
 
       - name: Release gate
         run: node scripts/check-release.mjs

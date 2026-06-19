@@ -56,7 +56,10 @@ for (const pkg of VERSIONED) {
     (f) =>
       f.startsWith(pkg + '/') &&
       !f.endsWith('CHANGELOG.md') &&
-      !f.endsWith('.md'),
+      !f.endsWith('.md') &&
+      // Dependency-only changes (e.g. Dependabot) don't require a version bump.
+      !f.endsWith('/package.json') &&
+      !f.endsWith('/pnpm-lock.yaml'),
   );
   if (!codeChanged) continue;
   if (!versionChanged(pkg)) {
