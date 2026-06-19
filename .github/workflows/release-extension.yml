@@ -61,11 +61,17 @@ jobs:
           EXT_ID: ${{ steps.pkg.outputs.id }}
           EXT_VERSION: ${{ steps.pkg.outputs.version }}
         run: |
-          if npx --yes @vscode/vsce show "$EXT_ID" --json > /tmp/marketplace.json 2>/dev/null; then
-            published=$(node -e "const v=require('/tmp/marketplace.json').versions||[];console.log(v.some(x=>x.version===process.env.EXT_VERSION)?'yes':'no')")
-          else
-            published=no
-          fi
+          npx --yes @vscode/vsce show "$EXT_ID" --json > /tmp/marketplace.json 2>/dev/null || true
+          published=$(node -e '
+            try {
+              const fs = require("fs");
+              const raw = fs.readFileSync("/tmp/marketplace.json", "utf8").trim();
+              if (!raw || raw === "undefined") { console.log("no"); process.exit(0); }
+              const data = JSON.parse(raw);
+              const v = data.versions || [];
+              console.log(v.some(x => x.version === process.env.EXT_VERSION) ? "yes" : "no");
+            } catch { console.log("no"); }
+          ')
           echo "published=$published" >> "$GITHUB_OUTPUT"
           echo "::notice::Marketplace has $EXT_ID@$EXT_VERSION: $published"
 
