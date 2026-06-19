@@ -50,6 +50,25 @@ export const SealedEnvelopeSchema = z.object({
 });
 export type SealedEnvelope = z.infer<typeof SealedEnvelopeSchema>;
 
+/**
+ * Plaintext key-exchange frame. Carries a peer's X25519 PUBLIC key so the other
+ * side can complete ECDH. Public keys are safe to send in clear; the relay
+ * forwards these opaquely (like sealed envelopes) and cannot derive the shared
+ * secret without a private key.
+ */
+export const KeyExchangeFrameSchema = z.object({
+  t: z.literal('kx'),
+  room: z.string(),
+  from: PeerSchema,
+  /** base64url X25519 public key. */
+  pub: z.string().min(1),
+});
+export type KeyExchangeFrame = z.infer<typeof KeyExchangeFrameSchema>;
+
 /** Anything that can travel over the socket. */
-export const WireFrameSchema = z.union([RelayFrameSchema, SealedEnvelopeSchema]);
+export const WireFrameSchema = z.union([
+  RelayFrameSchema,
+  SealedEnvelopeSchema,
+  KeyExchangeFrameSchema,
+]);
 export type WireFrame = z.infer<typeof WireFrameSchema>;

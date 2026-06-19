@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import WebSocket from 'ws';
 import {
+  KeyExchangeFrameSchema,
   PROTOCOL_VERSION,
   SealedEnvelopeSchema,
   type AppMessage,
@@ -15,14 +16,17 @@ export interface RelayClientOptions {
   role: Peer;
   /** GitHub token for relay auth. */
   authToken: string;
-  /** Shared AES-GCM key for E2E. */
-  key: CryptoKey;
+  /** Shared AES-GCM key for E2E. May be undefined until key exchange completes. */
+  key?: CryptoKey;
+  /** Our X25519 public key, broadcast to the peer for ECDH. */
+  ourPublicKey: string;
 }
 
 type Events = {
   connected: [];
   joined: [{ peers: number }];
   peer: [{ role: Peer; online: boolean }];
+  keyExchange: [{ pub: string }];
   message: [AppMessage];
   error: [{ code: string; message: string }];
   closed: [{ code: number; reason: string }];
@@ -36,9 +40,20 @@ export class RelayClient extends EventEmitter<Events> {
   private ws?: WebSocket;
   private seq = 0;
   private closedByUs = false;
+  private key?: CryptoKey;
 
   constructor(private readonly opts: RelayClientOptions) {
     super();
+    this.key = opts.key;
+  }
+
+  /** Set/replace the shared key once key exchange completes. */
+  setKey(key: CryptoKey): void {
+    this.key = key;
+  }
+
+  hasKey(): boolean {
+    return !!this.key;
   }
 
   connect(): void {
@@ -80,15 +95,30 @@ export class RelayClient extends EventEmitter<Events> {
       return;
     }
     const obj = parsed as { t?: string };
-    if (obj.t === 'joined') return void this.emit('joined', { peers: (parsed as { peers: number }).peers });
-    if (obj.t === 'peer') return void this.emit('peer', parsed as { role: Peer; online: boolean });
+    if (obj.t === 'joined') {
+      // Only safe to send after the (async) join is accepted by the relay.
+      this.sendKeyExchange();
+      return void this.emit('joined', { peers: (parsed as { peers: number }).peers });
+    }
+    if (obj.t === 'peer') {
+      this.emit('peer', parsed as { role: Peer; online: boolean });
+      // Re-announce our key when a peer (re)connects.
+      if ((parsed as { online?: boolean }).online) this.sendKeyExchange();
+      return;
+    }
     if (obj.t === 'error') return void this.emit('error', parsed as { code: string; message: string });
     if (obj.t === 'pong') return;
 
+    const kx = KeyExchangeFrameSchema.safeParse(parsed);
+    if (kx.success) {
+      return void this.emit('keyExchange', { pub: kx.data.pub });
+    }
+
     const env = SealedEnvelopeSchema.safeParse(parsed);
     if (env.success) {
+      if (!this.key) return;
       try {
-        const plaintext = await open(this.opts.key, {
+        const plaintext = await open(this.key, {
           nonce: env.data.nonce,
           ciphertext: env.data.ciphertext,
         });
@@ -99,10 +129,22 @@ export class RelayClient extends EventEmitter<Events> {
     }
   }
 
+  private sendKeyExchange(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.ws.send(
+      JSON.stringify({
+        t: 'kx',
+        room: this.opts.room,
+        from: this.opts.role,
+        pub: this.opts.ourPublicKey,
+      }),
+    );
+  }
+
   /** Encrypt and send an application message to the peer(s). */
   async send(msg: AppMessage): Promise<void> {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    const sealed: Sealed = await seal(this.opts.key, JSON.stringify(msg));
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.key) return;
+    const sealed: Sealed = await seal(this.key, JSON.stringify(msg));
     const env: SealedEnvelope = {
       t: 'sealed',
       room: this.opts.room,

@@ -87,6 +87,7 @@ export function ConnectionProvider({
         room: pairing.room,
         authToken,
         key,
+        ourPublicKey: pairing.keyPair.publicKey,
         onMessage: handleMessage,
         onStatus: (s) => {
           store.setStatus(s);

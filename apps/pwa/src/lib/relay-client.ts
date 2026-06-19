@@ -13,6 +13,8 @@ export interface BrowserRelayOptions {
   room: string;
   authToken: string;
   key: CryptoKey;
+  /** Our X25519 public key, broadcast to the extension for ECDH. */
+  ourPublicKey: string;
   onMessage: (msg: AppMessage) => void;
   onStatus: (status: RelayStatus) => void;
 }
@@ -77,10 +79,19 @@ export class BrowserRelayClient {
       return;
     }
     const obj = parsed as { t?: string; online?: boolean };
-    if (obj.t === 'joined') return this.opts.onStatus('online');
-    if (obj.t === 'peer') return this.opts.onStatus(obj.online ? 'peer-online' : 'peer-offline');
+    if (obj.t === 'joined') {
+      // Only safe to send frames after the (async) join is accepted.
+      this.sendKeyExchange();
+      return this.opts.onStatus('online');
+    }
+    if (obj.t === 'peer') {
+      // When the extension (re)connects, re-announce our public key.
+      if (obj.online) this.sendKeyExchange();
+      return this.opts.onStatus(obj.online ? 'peer-online' : 'peer-offline');
+    }
     if (obj.t === 'error') return this.opts.onStatus('error');
     if (obj.t === 'pong') return;
+    if (obj.t === 'kx') return; // extension's public key; PWA already has it from the QR.
 
     const env = SealedEnvelopeSchema.safeParse(parsed);
     if (env.success) {
@@ -94,6 +105,18 @@ export class BrowserRelayClient {
         this.opts.onStatus('error');
       }
     }
+  }
+
+  private sendKeyExchange(): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.ws.send(
+      JSON.stringify({
+        t: 'kx',
+        room: this.opts.room,
+        from: 'pwa',
+        pub: this.opts.ourPublicKey,
+      }),
+    );
   }
 
   async send(msg: AppMessage): Promise<void> {

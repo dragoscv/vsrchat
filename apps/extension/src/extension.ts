@@ -123,11 +123,10 @@ class Controller {
   private async startRelay(pairing: StoredPairing, token: string): Promise<void> {
     this.relay?.close();
 
-    // If we already learned the peer key, derive immediately; otherwise we use a
-    // bootstrap key derived from our own pair (still E2E once peer key arrives).
-    const key = pairing.peerPublicKey
-      ? await this.pairingMgr.deriveKey(pairing)
-      : await this.bootstrapKey(pairing);
+    // The real shared key requires the PWA's public key. If we already learned
+    // it during a previous pairing, derive now; otherwise we start key-less and
+    // derive when the phone announces its public key (kx frame).
+    const key = pairing.peerPublicKey ? await this.pairingMgr.deriveKey(pairing) : undefined;
 
     const wsUrl = this.relayHttpUrl();
     this.relay = new RelayClient({
@@ -136,16 +135,18 @@ class Controller {
       role: 'ext',
       authToken: token,
       key,
+      ourPublicKey: pairing.keyPair.publicKey,
     });
 
     this.relay.on('joined', () => this.setStatus('online'));
     this.relay.on('peer', ({ online }) => {
       this.setStatus(online ? 'phone' : 'online');
-      if (online) {
+      if (online && this.relay?.hasKey()) {
         void this.sendHello();
         this.pushSessions();
       }
     });
+    this.relay.on('keyExchange', ({ pub }) => void this.onKeyExchange(pairing, pub));
     this.relay.on('message', (msg) => void this.onMessage(msg as PwaMessage));
     this.relay.on('error', ({ message }) => {
       void vscode.window.showErrorMessage(`vsrchat relay: ${message}`);
@@ -156,12 +157,16 @@ class Controller {
     if (this.cfg<boolean>('mirrorRealSessions', true)) this.sessions.startWatching();
   }
 
-  /** Bootstrap symmetric key from our own keypair + salt (replaced once peer key known). */
-  private async bootstrapKey(pairing: StoredPairing): Promise<CryptoKey> {
-    const { deriveSharedKey } = await import('@vsrchat/crypto');
-    // Derive against our own public key as a deterministic placeholder; the real
-    // shared key is established after the PWA sends its public key in pairing.
-    return deriveSharedKey(pairing.keyPair.privateKey, pairing.keyPair.publicKey, pairing.salt);
+  /** Complete ECDH once the phone announces its public key. */
+  private async onKeyExchange(pairing: StoredPairing, peerPub: string): Promise<void> {
+    if (peerPub === pairing.peerPublicKey && this.relay?.hasKey()) return;
+    pairing.peerPublicKey = peerPub;
+    await this.pairingMgr.save(pairing);
+    const key = await this.pairingMgr.deriveKey(pairing);
+    this.relay?.setKey(key);
+    this.setStatus('phone');
+    await this.sendHello();
+    this.pushSessions();
   }
 
   async disconnect(): Promise<void> {

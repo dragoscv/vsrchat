@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
+  KeyExchangeFrameSchema,
   RelayFrameSchema,
   SealedEnvelopeSchema,
   WireFrameSchema,
@@ -112,6 +113,21 @@ wss.on('connection', (ws: WebSocket) => {
       // The relay NEVER decrypts. It just relays the ciphertext to peers.
       for (const other of rooms.others(state.room, state.member)) {
         send(other.socket, sealed.data);
+      }
+      return;
+    }
+
+    // --- Key-exchange frames: forward plaintext public keys to peers ---
+    const kx = KeyExchangeFrameSchema.safeParse(parsed);
+    if (kx.success) {
+      if (!state.member || !state.room) {
+        return fail(ws, 'not-joined', 'Must join a room before sending.');
+      }
+      if (kx.data.room !== state.room) {
+        return fail(ws, 'room-mismatch', 'Frame room does not match joined room.');
+      }
+      for (const other of rooms.others(state.room, state.member)) {
+        send(other.socket, kx.data);
       }
       return;
     }
