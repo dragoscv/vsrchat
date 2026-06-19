@@ -10,12 +10,15 @@ vsrchat publishes to both the **VS Code Marketplace** and **Open VSX**.
    The publisher id must be **`dragoscv`** (matches `package.json`).
 2. Create an Azure DevOps **Personal Access Token** with **Marketplace → Manage**
    scope: <https://dev.azure.com> → User settings → Personal access tokens.
-3. Store it as the repo secret `VSCE_PAT`.
+3. Store it as the repo secret `VSCE_KEY` (the workflow maps it to the `VSCE_PAT`
+   env var that `vsce` expects). This matches the secret name used across the
+   `dragoscv` publisher's other extension repos.
 
 ### Open VSX
 
 1. Create an account at <https://open-vsx.org> and a namespace `dragoscv`.
-2. Generate an access token; store it as the repo secret `OVSX_PAT`.
+2. Generate an access token; store it as the repo secret `OVSX_KEY` (mapped to
+   the `OVSX_PAT` env var at publish time).
 
 ## Releasing
 
@@ -37,8 +40,8 @@ vsrchat publishes to both the **VS Code Marketplace** and **Open VSX**.
 pnpm --filter vsrchat build
 cd apps/extension
 pnpm package                 # -> vsrchat.vsix
-VSCE_PAT=xxx pnpm publish:vsce
-OVSX_PAT=xxx pnpm publish:ovsx
+VSCE_PAT=xxx pnpm publish:vsce   # value of the VSCE_KEY secret
+OVSX_PAT=xxx pnpm publish:ovsx   # value of the OVSX_KEY secret
 ```
 
 ## Marketplace assets checklist
