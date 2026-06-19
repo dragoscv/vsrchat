@@ -134,7 +134,7 @@
     "@types/ws": "catalog:",
     "@vscode/vsce": "^3.2.1",
     "@vsrchat/config": "workspace:*",
-    "ovsx": "^0.10.1",
+    "ovsx": "^1.0.1",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
