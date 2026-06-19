@@ -8,6 +8,7 @@ on:
       - 'packages/protocol/**'
       - 'packages/crypto/**'
       - '.github/workflows/release-relay.yml'
+  workflow_dispatch:
 
 concurrency:
   group: release-relay
@@ -20,7 +21,29 @@ env:
   REPO: vsrchat
 
 jobs:
+  # Only run when GCP Workload Identity is configured. Until then the relay is
+  # deployed manually (see docs/deploy-relay.md), so we skip cleanly instead of
+  # failing every push.
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        env:
+          WIF: ${{ secrets.GCP_WIF_PROVIDER }}
+          SA: ${{ secrets.GCP_DEPLOY_SA }}
+        run: |
+          if [ -n "$WIF" ] && [ -n "$SA" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GCP_WIF_PROVIDER/GCP_DEPLOY_SA not set — skipping relay deploy (deploy manually per docs/deploy-relay.md)."
+          fi
+
   deploy:
+    needs: guard
+    if: needs.guard.outputs.ready == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
