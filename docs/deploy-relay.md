@@ -45,9 +45,21 @@ curl https://<your-relay>.run.app/health
 
 ## CI/CD
 
-`.github/workflows/release-relay.yml` builds and deploys on every push to `main`
-that touches `apps/relay`, `packages/protocol`, or `packages/crypto`. Configure
-these repo secrets:
+`.github/workflows/release-relay.yml` is **smart and version-driven**:
+
+- It only runs when files under `apps/relay/`, `packages/protocol/`, or
+  `packages/crypto/` change (path-filtered).
+- A **gate job** deploys only when (a) the GCP secrets are configured **and**
+  (b) the relay version in `apps/relay/package.json` is new (no `relay-v<version>`
+  tag yet). Otherwise it skips cleanly — no failed runs, no redundant deploys.
+- On deploy it builds + pushes the image, deploys to Cloud Run, runs a
+  `/health` check, then **auto-creates the `relay-v<version>` tag**.
+
+To cut a relay release: bump `apps/relay/package.json` version + add a CHANGELOG
+entry, push to `main`. To re-deploy an unchanged version, run the workflow
+manually with **force: true**.
+
+Required repo secrets:
 
 - `GCP_WIF_PROVIDER`, `GCP_DEPLOY_SA` (Workload Identity Federation)
 - `VSRCHAT_ALLOWED_GITHUB_IDS`, `VSRCHAT_ALLOWED_GITHUB_LOGINS`

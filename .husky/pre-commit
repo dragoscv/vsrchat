@@ -1,15 +1,22 @@
 echo "🔎 vsrchat pre-commit checks…"
 
-# 1) Format check on staged files (fast).
-pnpm format:check || {
-  echo "✖ Prettier found formatting issues. Run: pnpm format";
-  exit 1;
-}
+# 1) Format check (fast).
+if ! pnpm -s format:check; then
+  echo ""
+  echo "✖ Prettier found formatting issues."
+  echo "  Fix with: pnpm format"
+  exit 1
+fi
 
 # 2) Typecheck changed packages via turbo (cached, only affected).
-pnpm turbo run typecheck --filter='...[HEAD]' || exit 1
+if ! pnpm -s turbo run typecheck --filter='...[HEAD]'; then
+  echo ""
+  echo "✖ Type errors found. Fix them, then re-commit."
+  exit 1
+fi
 
-# 3) Release gate: version bump + CHANGELOG when shipping code changes.
+# 3) Release gate: require a version bump + CHANGELOG entry when shipping
+#    code changes. Prints detailed, copy-pasteable guidance on failure.
 node scripts/check-release.mjs || exit 1
 
 echo "✓ pre-commit passed."

@@ -3,16 +3,26 @@ name: Release relay
 on:
   push:
     branches: [main]
+    # Only consider running when something that affects the relay changes.
     paths:
       - 'apps/relay/**'
       - 'packages/protocol/**'
       - 'packages/crypto/**'
       - '.github/workflows/release-relay.yml'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Deploy even if the version is unchanged'
+        type: boolean
+        default: false
 
 concurrency:
   group: release-relay
   cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
 
 env:
   PROJECT_ID: vsrchat
@@ -21,35 +31,65 @@ env:
   REPO: vsrchat
 
 jobs:
-  # Only run when GCP Workload Identity is configured. Until then the relay is
-  # deployed manually (see docs/deploy-relay.md), so we skip cleanly instead of
-  # failing every push.
-  guard:
+  # ── Gate ──────────────────────────────────────────────────────────────
+  # Deploy only when BOTH are true:
+  #   1. GCP Workload Identity secrets are configured, and
+  #   2. the relay version in package.json is new (no matching relay-v tag),
+  #      or a manual run forces it.
+  gate:
     runs-on: ubuntu-latest
     outputs:
-      ready: ${{ steps.check.outputs.ready }}
-    steps:
-      - id: check
-        env:
-          WIF: ${{ secrets.GCP_WIF_PROVIDER }}
-          SA: ${{ secrets.GCP_DEPLOY_SA }}
-        run: |
-          if [ -n "$WIF" ] && [ -n "$SA" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::GCP_WIF_PROVIDER/GCP_DEPLOY_SA not set — skipping relay deploy (deploy manually per docs/deploy-relay.md)."
-          fi
-
-  deploy:
-    needs: guard
-    if: needs.guard.outputs.ready == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+      should_deploy: ${{ steps.decide.outputs.should_deploy }}
+      version: ${{ steps.decide.outputs.version }}
+      tag: ${{ steps.decide.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether to deploy
+        id: decide
+        env:
+          FORCE: ${{ github.event.inputs.force }}
+          HAS_GCP: ${{ secrets.GCP_WIF_PROVIDER != '' && secrets.GCP_DEPLOY_SA != '' }}
+        run: |
+          version=$(node -p "require('./apps/relay/package.json').version")
+          tag="relay-v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          if [ "$HAS_GCP" != "true" ]; then
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GCP_WIF_PROVIDER/GCP_DEPLOY_SA not set — skipping deploy (deploy manually per docs/deploy-relay.md)."
+            exit 0
+          fi
+
+          if [ "$FORCE" = "true" ]; then
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Force requested — will deploy $tag."
+            exit 0
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Tag $tag already exists — version unchanged, nothing to deploy."
+          else
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::New version $version detected — will deploy and tag $tag."
+          fi
+
+  # ── Deploy ────────────────────────────────────────────────────────────
+  deploy:
+    needs: gate
+    if: needs.gate.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.gate.outputs.version }}
+      TAG: ${{ needs.gate.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - id: auth
         uses: google-github-actions/auth@v3
@@ -64,8 +104,10 @@ jobs:
 
       - name: Build & push image
         run: |
-          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/relay:${GITHUB_SHA::12}"
-          docker build -f apps/relay/Dockerfile -t "$IMAGE" -t "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/relay:latest" .
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/relay:v${VERSION}"
+          docker build -f apps/relay/Dockerfile \
+            -t "$IMAGE" \
+            -t "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/relay:latest" .
           docker push "$IMAGE"
           docker push "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/relay:latest"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
@@ -83,3 +125,28 @@ jobs:
             --min-instances 0 \
             --max-instances 2 \
             --set-env-vars "VSRCHAT_ALLOWED_GITHUB_IDS=${{ secrets.VSRCHAT_ALLOWED_GITHUB_IDS }},VSRCHAT_ALLOWED_GITHUB_LOGINS=${{ secrets.VSRCHAT_ALLOWED_GITHUB_LOGINS }}"
+
+      - name: Verify health
+        run: |
+          url=$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format 'value(status.url)')
+          echo "::notice::Relay URL: $url"
+          for i in 1 2 3 4 5; do
+            if curl -fsS "$url/health" >/dev/null; then
+              echo "::notice::Health check passed."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Relay health check failed."
+          exit 1
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::notice::Tag $TAG already exists — skipping tag creation."
+          else
+            git tag -a "$TAG" -m "Release relay $VERSION"
+            git push origin "$TAG"
+          fi
