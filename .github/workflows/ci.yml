@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Only build/lint/test packages affected by this PR (fast CI).
+      - name: Typecheck (affected)
+        run: pnpm turbo run typecheck --filter='...[origin/main]'
+
+      - name: Lint (affected)
+        run: pnpm turbo run lint --filter='...[origin/main]'
+
+      - name: Test (affected)
+        run: pnpm turbo run test --filter='...[origin/main]'
+
+      - name: Build (affected)
+        env:
+          SKIP_ENV_VALIDATION: '1'
+          AUTH_SECRET: ci-placeholder-secret-0000000000000000
+        run: pnpm turbo run build --filter='...[origin/main]'
+
+      - name: Release gate
+        run: node scripts/check-release.mjs

@@ -1,0 +1,26 @@
+node_modules/
+dist/
+out/
+.next/
+.turbo/
+coverage/
+*.vsix
+*.log
+.DS_Store
+
+# env
+.env
+.env.*
+!.env.example
+
+# terraform
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/*.tfvars
+!infra/**/*.tfvars.example
+infra/**/.terraform.lock.hcl
+
+# misc
+.vscode-test/
+*.tsbuildinfo

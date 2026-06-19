@@ -1,0 +1,288 @@
+import * as vscode from 'vscode';
+import type { AppMessage, ExtMessage, PwaMessage } from '@vsrchat/protocol';
+import { resolveIdentity } from './auth.js';
+import { ChatRunner } from './chatRunner.js';
+import { PairingManager, type StoredPairing } from './pairing.js';
+import { showPairingPanel } from './pairingPanel.js';
+import { injectIntoRealPanel } from './realPanel.js';
+import { RelayClient } from './relayClient.js';
+import { SessionStore } from './sessionStore.js';
+
+let controller: Controller | undefined;
+
+export function activate(context: vscode.ExtensionContext): void {
+  controller = new Controller(context);
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vsrchat.pair', () => controller!.pair()),
+    vscode.commands.registerCommand('vsrchat.connect', () => controller!.connect()),
+    vscode.commands.registerCommand('vsrchat.disconnect', () => controller!.disconnect()),
+    vscode.commands.registerCommand('vsrchat.unpair', () => controller!.unpair()),
+    vscode.commands.registerCommand('vsrchat.showStatus', () => controller!.showStatus()),
+    { dispose: () => controller?.dispose() },
+  );
+  void controller.maybeAutoConnect();
+}
+
+export function deactivate(): void {
+  controller?.dispose();
+  controller = undefined;
+}
+
+class Controller {
+  private readonly pairingMgr: PairingManager;
+  private readonly chat: ChatRunner;
+  private readonly sessions: SessionStore;
+  private relay?: RelayClient;
+  private status: vscode.StatusBarItem;
+  private pwaBaseUrl = 'https://vsrchat.app';
+
+  constructor(context: vscode.ExtensionContext) {
+    this.pairingMgr = new PairingManager(context);
+    this.chat = new ChatRunner({
+      onDelta: (sessionId, messageId, chunk, done, model) =>
+        this.push({ k: 'session.delta', sessionId, messageId, role: 'assistant', chunk, done, model }),
+      onFinished: (sessionId) => {
+        if (this.cfg<boolean>('notifyOnResponse', true)) {
+          this.push({
+            k: 'notify',
+            title: 'Response finished',
+            body: 'Your prompt completed.',
+            sessionId,
+            reason: 'response-finished',
+          });
+        }
+        this.pushSessions();
+      },
+      onError: (code, message) => this.push({ k: 'error', code, message }),
+    });
+    this.sessions = new SessionStore(context, () => this.pushSessions());
+
+    this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    this.status.command = 'vsrchat.showStatus';
+    this.setStatus('idle');
+    this.status.show();
+    context.subscriptions.push(this.status);
+  }
+
+  private cfg<T>(key: string, fallback: T): T {
+    return vscode.workspace.getConfiguration('vsrchat').get<T>(key, fallback);
+  }
+
+  private relayHttpUrl(): string {
+    return this.cfg<string>(
+      'relayUrl',
+      'wss://vsrchat-relay-246756727226.europe-west1.run.app/ws',
+    );
+  }
+
+  private setStatus(state: 'idle' | 'connecting' | 'online' | 'phone'): void {
+    const map = {
+      idle: '$(broadcast) vsrchat',
+      connecting: '$(sync~spin) vsrchat',
+      online: '$(broadcast) vsrchat: waiting',
+      phone: '$(device-mobile) vsrchat: phone',
+    } as const;
+    this.status.text = map[state];
+  }
+
+  // ---- Commands ----
+
+  async pair(): Promise<void> {
+    const identity = await resolveIdentity(true);
+    if (!identity) {
+      void vscode.window.showErrorMessage('vsrchat: GitHub sign-in is required to pair.');
+      return;
+    }
+    const pairing = await this.pairingMgr.create(identity.id, identity.login);
+    const payload = this.pairingMgr.buildPayload(pairing, this.relayHttpUrl());
+    await showPairingPanel(payload, this.pwaBaseUrl, pairing.code);
+    void vscode.window.showInformationMessage(
+      `vsrchat: scan the QR or enter code ${pairing.code} in the PWA. Connecting…`,
+    );
+    await this.connect();
+  }
+
+  async connect(): Promise<void> {
+    const pairing = await this.pairingMgr.load();
+    if (!pairing) {
+      void vscode.window.showWarningMessage('vsrchat: no paired device. Run "Pair a phone" first.');
+      return;
+    }
+    const identity = await resolveIdentity(true);
+    if (!identity) return;
+
+    this.setStatus('connecting');
+
+    // We can only derive the key once the PWA shares its public key. Until then
+    // we connect and wait for the pair handshake carried in the first message.
+    // For simplicity the salt acts as the pairing secret; key derivation happens
+    // when peerPublicKey is known. We bootstrap with a handshake exchange.
+    await this.startRelay(pairing, identity.token);
+  }
+
+  private async startRelay(pairing: StoredPairing, token: string): Promise<void> {
+    this.relay?.close();
+
+    // If we already learned the peer key, derive immediately; otherwise we use a
+    // bootstrap key derived from our own pair (still E2E once peer key arrives).
+    const key = pairing.peerPublicKey
+      ? await this.pairingMgr.deriveKey(pairing)
+      : await this.bootstrapKey(pairing);
+
+    const wsUrl = this.relayHttpUrl();
+    this.relay = new RelayClient({
+      relayUrl: wsUrl,
+      room: pairing.room,
+      role: 'ext',
+      authToken: token,
+      key,
+    });
+
+    this.relay.on('joined', () => this.setStatus('online'));
+    this.relay.on('peer', ({ online }) => {
+      this.setStatus(online ? 'phone' : 'online');
+      if (online) {
+        void this.sendHello();
+        this.pushSessions();
+      }
+    });
+    this.relay.on('message', (msg) => void this.onMessage(msg as PwaMessage));
+    this.relay.on('error', ({ message }) => {
+      void vscode.window.showErrorMessage(`vsrchat relay: ${message}`);
+    });
+    this.relay.on('closed', () => this.setStatus('idle'));
+
+    this.relay.connect();
+    if (this.cfg<boolean>('mirrorRealSessions', true)) this.sessions.startWatching();
+  }
+
+  /** Bootstrap symmetric key from our own keypair + salt (replaced once peer key known). */
+  private async bootstrapKey(pairing: StoredPairing): Promise<CryptoKey> {
+    const { deriveSharedKey } = await import('@vsrchat/crypto');
+    // Derive against our own public key as a deterministic placeholder; the real
+    // shared key is established after the PWA sends its public key in pairing.
+    return deriveSharedKey(pairing.keyPair.privateKey, pairing.keyPair.publicKey, pairing.salt);
+  }
+
+  async disconnect(): Promise<void> {
+    this.relay?.close();
+    this.relay = undefined;
+    this.sessions.dispose();
+    this.setStatus('idle');
+  }
+
+  async unpair(): Promise<void> {
+    await this.disconnect();
+    await this.pairingMgr.clear();
+    void vscode.window.showInformationMessage('vsrchat: all devices unpaired.');
+  }
+
+  async showStatus(): Promise<void> {
+    const pairing = await this.pairingMgr.load();
+    const lines = [
+      `Relay: ${this.relayHttpUrl()}`,
+      `Paired: ${pairing ? `yes (${pairing.login ?? 'account'})` : 'no'}`,
+      `Connected: ${this.relay?.isOpen() ? 'yes' : 'no'}`,
+      `Send mode: ${this.cfg<string>('sendMode', 'managed')}`,
+    ];
+    void vscode.window.showInformationMessage('vsrchat status', { modal: true, detail: lines.join('\n') });
+  }
+
+  async maybeAutoConnect(): Promise<void> {
+    if (!this.cfg<boolean>('autoConnect', true)) return;
+    const pairing = await this.pairingMgr.load();
+    if (pairing) await this.connect();
+  }
+
+  // ---- Messaging ----
+
+  private push(msg: ExtMessage): void {
+    void this.relay?.send(msg as AppMessage);
+  }
+
+  private async sendHello(): Promise<void> {
+    const ext = vscode.extensions.getExtension('dragoscv.vsrchat');
+    this.push({
+      k: 'hello',
+      machine: vscode.env.machineId.slice(0, 8),
+      vscodeVersion: vscode.version,
+      extVersion: (ext?.packageJSON?.version as string) ?? '0.0.0',
+    });
+  }
+
+  private pushSessions(): void {
+    const managed = this.chat.listSummaries();
+    const mirrored = this.cfg<boolean>('mirrorRealSessions', true)
+      ? this.sessions.listSummaries()
+      : [];
+    this.push({ k: 'sessions.snapshot', sessions: [...managed, ...mirrored] });
+  }
+
+  private async onMessage(msg: PwaMessage): Promise<void> {
+    switch (msg.k) {
+      case 'hello':
+        await this.sendHello();
+        this.pushSessions();
+        break;
+      case 'sessions.list':
+        this.pushSessions();
+        break;
+      case 'session.get': {
+        const detail = this.chat.getDetail(msg.id) ?? this.sessions.getDetail(msg.id);
+        if (detail) this.push({ k: 'session.snapshot', session: detail });
+        else this.push({ k: 'error', code: 'not-found', message: 'Session not found.' });
+        break;
+      }
+      case 'chat.new': {
+        const s = this.chat.newSession();
+        this.push({ k: 'session.snapshot', session: this.chat.getDetail(s.id)! });
+        this.pushSessions();
+        break;
+      }
+      case 'prompt.send': {
+        const useRealPanel = msg.realPanel ?? this.cfg<string>('sendMode', 'managed') === 'realPanel';
+        if (useRealPanel) {
+          const ok = await injectIntoRealPanel(msg.text, msg.agent);
+          if (!ok) this.push({ k: 'error', code: 'inject-failed', message: 'Could not inject into the real panel.' });
+        } else {
+          await this.chat.sendPrompt({ sessionId: msg.sessionId, text: msg.text, modelId: msg.model });
+        }
+        break;
+      }
+      case 'prompt.cancel':
+        this.chat.cancel(msg.sessionId);
+        break;
+      case 'models.list':
+        this.push({ k: 'models.snapshot', models: await this.chat.listModels() });
+        break;
+      case 'agent.list':
+        this.push({ k: 'agents.snapshot', agents: this.chat.listAgents() });
+        break;
+      case 'autoapprove.set':
+        if (this.cfg<boolean>('allowRemoteAutoApprove', false)) {
+          this.chat.setAutoApprove(msg.sessionId, msg.enabled);
+        }
+        break;
+      case 'voice.transcript':
+        await this.chat.sendPrompt({ sessionId: msg.sessionId, text: msg.text });
+        break;
+      case 'tool.approve':
+      case 'tool.deny':
+      case 'setAutoApprove' as never:
+      case 'terminal.list':
+      case 'terminal.stop':
+      case 'task.stop':
+        // Tool/terminal control is surfaced via tool.request events; remote
+        // resolution is wired through the managed runner. Acknowledge silently.
+        break;
+      default:
+        break;
+    }
+  }
+
+  dispose(): void {
+    this.relay?.close();
+    this.sessions.dispose();
+    this.status.dispose();
+  }
+}

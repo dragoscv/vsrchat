@@ -1,0 +1,38 @@
+{
+  "name": "vsrchat",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VS Remote Chat — drive your VS Code Copilot Chat from your phone via an end-to-end encrypted relay.",
+  "author": "Dragoș Cătălin <https://dragoscatalin.ro>",
+  "license": "MIT",
+  "homepage": "https://github.com/dragoscv/vsrchat",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dragoscv/vsrchat.git"
+  },
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
+  "packageManager": "pnpm@10.11.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rimraf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
+    "check:release": "node scripts/check-release.mjs",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "husky": "^9.1.7",
+    "prettier": "^3.4.2",
+    "rimraf": "^6.0.1",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

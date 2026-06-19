@@ -1,0 +1,62 @@
+name: Release relay
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/relay/**'
+      - 'packages/protocol/**'
+      - 'packages/crypto/**'
+      - '.github/workflows/release-relay.yml'
+
+concurrency:
+  group: release-relay
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: vsrchat
+  REGION: europe-west1
+  SERVICE: vsrchat-relay
+  REPO: vsrchat
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build & push image
+        run: |
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/relay:${GITHUB_SHA::12}"
+          docker build -f apps/relay/Dockerfile -t "$IMAGE" -t "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/relay:latest" .
+          docker push "$IMAGE"
+          docker push "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/relay:latest"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --image "$IMAGE" \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8080 \
+            --timeout 3600 \
+            --min-instances 0 \
+            --max-instances 2 \
+            --set-env-vars "VSRCHAT_ALLOWED_GITHUB_IDS=${{ secrets.VSRCHAT_ALLOWED_GITHUB_IDS }},VSRCHAT_ALLOWED_GITHUB_LOGINS=${{ secrets.VSRCHAT_ALLOWED_GITHUB_LOGINS }}"

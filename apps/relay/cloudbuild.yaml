@@ -1,0 +1,19 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - apps/relay/Dockerfile
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/vsrchat/relay:${_TAG}
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/vsrchat/relay:latest
+      - .
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/vsrchat/relay:${_TAG}
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/vsrchat/relay:latest
+substitutions:
+  _REGION: europe-west1
+  _TAG: manual
+options:
+  logging: CLOUD_LOGGING_ONLY

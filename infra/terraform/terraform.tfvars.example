@@ -1,0 +1,8 @@
+project_id            = "vsrchat"
+region                = "europe-west1"
+allowed_github_ids    = "123456"
+allowed_github_logins = "dragoscv"
+min_instances         = 0
+max_instances         = 2
+# relay_image set by CI after pushing the image, e.g.:
+# relay_image = "europe-west1-docker.pkg.dev/vsrchat/vsrchat/relay:sha-abc123"

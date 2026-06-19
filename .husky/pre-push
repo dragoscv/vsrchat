@@ -1,0 +1,3 @@
+echo "🏗  vsrchat pre-push: building affected packages…"
+pnpm turbo run build --filter='...[origin/main]' || exit 1
+echo "✓ pre-push build passed."

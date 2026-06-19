@@ -1,0 +1,142 @@
+{
+  "name": "vsrchat",
+  "displayName": "VS Remote Chat",
+  "description": "Drive your VS Code Copilot Chat from your phone — view sessions, stream responses, send prompts, and approve tools remotely over an end-to-end-encrypted relay.",
+  "version": "0.1.0",
+  "publisher": "dragoscv",
+  "license": "MIT",
+  "author": {
+    "name": "Dragoș Cătălin",
+    "url": "https://dragoscatalin.ro"
+  },
+  "homepage": "https://github.com/dragoscv/vsrchat",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dragoscv/vsrchat.git",
+    "directory": "apps/extension"
+  },
+  "bugs": {
+    "url": "https://github.com/dragoscv/vsrchat/issues"
+  },
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#0a0a0f",
+    "theme": "dark"
+  },
+  "categories": ["AI", "Chat", "Other"],
+  "keywords": ["copilot", "remote", "chat", "phone", "mobile", "pwa", "ai"],
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "type": "commonjs",
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "vsrchat.pair",
+        "title": "VS Remote Chat: Pair a phone…",
+        "category": "VS Remote Chat"
+      },
+      {
+        "command": "vsrchat.connect",
+        "title": "VS Remote Chat: Connect to relay",
+        "category": "VS Remote Chat"
+      },
+      {
+        "command": "vsrchat.disconnect",
+        "title": "VS Remote Chat: Disconnect",
+        "category": "VS Remote Chat"
+      },
+      {
+        "command": "vsrchat.unpair",
+        "title": "VS Remote Chat: Unpair all devices",
+        "category": "VS Remote Chat"
+      },
+      {
+        "command": "vsrchat.showStatus",
+        "title": "VS Remote Chat: Show status",
+        "category": "VS Remote Chat"
+      }
+    ],
+    "configuration": {
+      "title": "VS Remote Chat",
+      "properties": {
+        "vsrchat.relayUrl": {
+          "type": "string",
+          "default": "wss://vsrchat-relay-246756727226.europe-west1.run.app/ws",
+          "markdownDescription": "WebSocket URL of the vsrchat relay. Use your own Cloud Run URL, e.g. `wss://vsrchat-relay-xxxx.run.app/ws`."
+        },
+        "vsrchat.autoConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically connect to the relay when a paired device exists."
+        },
+        "vsrchat.sendMode": {
+          "type": "string",
+          "enum": ["managed", "realPanel"],
+          "enumDescriptions": [
+            "Run prompts via the Language Model API (reliable, streams, supports tools).",
+            "Experimental: inject prompts into the real Copilot Chat panel."
+          ],
+          "default": "managed",
+          "description": "How prompts sent from the phone are executed."
+        },
+        "vsrchat.mirrorRealSessions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Mirror your real Copilot Chat sessions (read-only) so you can view them on the phone."
+        },
+        "vsrchat.allowRemoteToolApproval": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow approving/denying tool and terminal calls from the phone."
+        },
+        "vsrchat.allowRemoteAutoApprove": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow the phone to toggle per-session auto-approve of tool calls. Use with caution."
+        },
+        "vsrchat.keepAwakeWhilePaired": {
+          "type": "boolean",
+          "default": false,
+          "description": "Hint the OS to keep the machine awake while a phone is paired and connected."
+        },
+        "vsrchat.notifyOnResponse": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send a push notification to the phone when a response finishes or input is needed."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "package": "vsce package --no-dependencies -o vsrchat.vsix",
+    "publish:vsce": "vsce publish --no-dependencies",
+    "publish:ovsx": "ovsx publish vsrchat.vsix",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rimraf dist .turbo *.vsix"
+  },
+  "dependencies": {
+    "@vsrchat/crypto": "workspace:*",
+    "@vsrchat/protocol": "workspace:*",
+    "qrcode": "^1.5.4",
+    "ws": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.5",
+    "@types/vscode": "^1.96.0",
+    "@types/ws": "catalog:",
+    "@vscode/vsce": "^3.2.1",
+    "@vsrchat/config": "workspace:*",
+    "ovsx": "^0.10.1",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
