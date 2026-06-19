@@ -13,8 +13,8 @@ catalogs:
       specifier: ^1.7.0
       version: 1.9.7
     '@noble/hashes':
-      specifier: ^1.6.1
-      version: 1.8.0
+      specifier: ^2.2.0
+      version: 2.2.0
     '@types/node':
       specifier: ^22.10.2
       version: 22.19.21
@@ -234,7 +234,7 @@ importers:
         version: 1.9.7
       '@noble/hashes':
         specifier: 'catalog:'
-        version: 1.8.0
+        version: 2.2.0
     devDependencies:
       '@vsrchat/config':
         specifier: workspace:*
@@ -1206,6 +1206,10 @@ packages:
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
+
+  '@noble/hashes@2.2.0':
+    resolution: {integrity: sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg==}
+    engines: {node: '>= 20.19.0'}
 
   '@node-rs/crc32-android-arm-eabi@1.10.6':
     resolution: {integrity: sha512-vZAMuJXm3TpWPOkkhxdrofWDv+Q+I2oO7ucLRbXyAPmXFNDhHtBxbO1rk9Qzz+M3eep8ieS4/+jCL1Q0zacNMQ==}
@@ -5000,6 +5004,8 @@ snapshots:
       '@noble/hashes': 1.8.0
 
   '@noble/hashes@1.8.0': {}
+
+  '@noble/hashes@2.2.0': {}
 
   '@node-rs/crc32-android-arm-eabi@1.10.6':
     optional: true
