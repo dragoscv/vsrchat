@@ -6,6 +6,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- Forwarding of plaintext `kx` key-exchange frames so peers can complete ECDH.
 - End-to-end-encrypted WebSocket broker (Hono + ws).
 - GitHub token verification with a single-user allowlist.
 - Room registry with per-room peer limits and liveness heartbeats.

@@ -4,6 +4,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- Send the `kx` public-key frame only after the relay accepts the join, so the
+  end-to-end key exchange completes reliably.
+
 ### Added
 
 - Dark glass-morphism PWA: landing, GitHub login, pairing, app shell with

@@ -1,13 +1,10 @@
-name: Release PWA
+name: Release PWA (manual fallback)
 
+# The PWA is normally deployed by Vercel's native Git integration on push to
+# main (Root Directory: apps/pwa). This workflow is a manual fallback only, to
+# avoid double-deploying. Trigger it from the Actions tab when needed.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/pwa/**'
-      - 'packages/protocol/**'
-      - 'packages/crypto/**'
-      - '.github/workflows/release-pwa.yml'
+  workflow_dispatch:
 
 concurrency:
   group: release-pwa

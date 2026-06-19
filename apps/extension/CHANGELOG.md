@@ -5,6 +5,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- E2E key agreement: the extension now exchanges public keys with the phone via
+  a `kx` frame (sent after the relay accepts the join) and derives the shared
+  AES-GCM key, instead of using a placeholder key.
+
 ### Added
 
 - Initial extension: GitHub auth, phone pairing (QR + short code), end-to-end

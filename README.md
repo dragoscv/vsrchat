@@ -34,6 +34,8 @@ Your Copilot Chat runs on your home PC. `vsrchat` lets you **see your sessions, 
 📱 PWA (Vercel)  ⇄  ☁️ Relay (Cloud Run, ciphertext only)  ⇄  🖥️ Extension (VS Code)
 ```
 
+**Live:** PWA → https://vsrchat.dragoscatalin.ro · Relay → `wss://vsrchat-relay-246756727226.europe-west1.run.app/ws`
+
 See [`plan/PLAN.md`](plan/PLAN.md) and [`docs/`](docs/) for full details.
 
 ## Monorepo
