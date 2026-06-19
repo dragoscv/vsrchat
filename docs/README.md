@@ -5,5 +5,6 @@
 - [Security & encryption](security.md) — pairing, E2E, threat model.
 - [Deploying the relay](deploy-relay.md) — GCP / Cloud Run / Terraform.
 - [Publishing the extension](publishing.md) — Marketplace + Open VSX.
+- [CI/CD overview](cicd.md) — smart version-driven pipelines.
 - [Development](development.md) — local dev workflow + conventions.
 - [Protocol reference](protocol.md) — the wire messages.

@@ -1,0 +1,84 @@
+name: Verify PWA deploy
+
+# The PWA is deployed by Vercel's native Git integration. This workflow does NOT
+# deploy — it verifies that the Vercel production deployment for this commit
+# actually succeeded and that the live site is healthy, so a broken deploy turns
+# the commit red instead of silently shipping.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/pwa/**'
+      - 'packages/protocol/**'
+      - 'packages/crypto/**'
+      - '.github/workflows/verify-pwa.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: verify-pwa-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      SITE_URL: https://vsrchat.dragoscatalin.ro
+    steps:
+      - name: Skip if Vercel secrets are missing
+        id: pre
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Vercel secrets not set — skipping deploy verification."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for Vercel production deployment of this commit
+        if: steps.pre.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          team="${VERCEL_ORG_ID:+&teamId=$VERCEL_ORG_ID}"
+          api="https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&target=production&limit=20${team}"
+          deadline=$(( $(date +%s) + 600 ))   # up to 10 minutes
+
+          while :; do
+            resp=$(curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "$api")
+            # Find the deployment matching this commit SHA.
+            state=$(SHA="$GITHUB_SHA" node -e '
+              const d = JSON.parse(require("fs").readFileSync(0, "utf8")).deployments || [];
+              const m = d.find(x => (x.meta && x.meta.githubCommitSha) === process.env.SHA);
+              if (!m) { console.log("PENDING"); process.exit(0); }
+              console.log(m.readyState || m.state || "PENDING");
+            ' <<< "$resp")
+
+            echo "Deployment state for ${GITHUB_SHA:0:7}: $state"
+            case "$state" in
+              READY) echo "::notice::Vercel production deploy READY."; exit 0 ;;
+              ERROR|CANCELED) echo "::error::Vercel deploy state: $state"; exit 1 ;;
+            esac
+
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::Timed out waiting for Vercel deployment of $GITHUB_SHA."
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Verify live site is healthy
+        if: steps.pre.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          for path in / /login /manifest.webmanifest /api/auth/providers; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$SITE_URL$path")
+            echo "$path -> $code"
+            case "$path:$code" in
+              /:200|/login:200|/manifest.webmanifest:200|/api/auth/providers:200) ;;
+              *) echo "::error::Unexpected status $code for $path"; exit 1 ;;
+            esac
+          done
+          echo "::notice::Live site healthy at $SITE_URL"
