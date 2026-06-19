@@ -1,6 +1,6 @@
-import { x25519 } from '@noble/curves/ed25519';
-import { hkdf } from '@noble/hashes/hkdf';
-import { sha256 } from '@noble/hashes/sha256';
+import { x25519 } from '@noble/curves/ed25519.js';
+import { hkdf } from '@noble/hashes/hkdf.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { base64urlToBytes, bytesToBase64url, bytesToUtf8, utf8ToBytes } from './base64.js';
 
 /**
@@ -26,7 +26,7 @@ export interface KeyPair {
 
 /** Generate an X25519 keypair. */
 export function generateKeyPair(): KeyPair {
-  const priv = x25519.utils.randomPrivateKey();
+  const priv = x25519.utils.randomSecretKey();
   const pub = x25519.getPublicKey(priv);
   return { publicKey: bytesToBase64url(pub), privateKey: bytesToBase64url(priv) };
 }

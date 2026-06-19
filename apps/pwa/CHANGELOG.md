@@ -4,6 +4,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded to latest stable dependencies: Next.js 16, React 19.2, Motion 12,
+  Zod 4, next-auth beta.31, Tailwind CSS 4.3, sonner 2, zustand 5.0.14,
+  TypeScript 6, vitest 4. Migrated ESLint to the Next 16 native flat config
+  (`eslint .`) and `@noble` v2 import paths.
+
 ### Fixed
 
 - Send the `kx` public-key frame only after the relay accepts the join, so the

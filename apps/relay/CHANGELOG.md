@@ -4,6 +4,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded to latest stable dependencies: Hono 4.12, `@hono/node-server` 2,
+  TypeScript 6, vitest 4.
+
 ### Added
 
 - Forwarding of plaintext `kx` key-exchange frames so peers can complete ECDH.

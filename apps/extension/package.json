@@ -2,7 +2,7 @@
   "name": "vsrchat",
   "displayName": "VS Remote Chat",
   "description": "Drive your VS Code Copilot Chat from your phone — view sessions, stream responses, send prompts, and approve tools remotely over an end-to-end-encrypted relay.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "dragoscv",
   "license": "MIT",
   "author": {
@@ -129,14 +129,15 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@types/qrcode": "^1.5.5",
+    "@types/qrcode": "^1.5.6",
     "@types/vscode": "^1.96.0",
     "@types/ws": "catalog:",
-    "@vscode/vsce": "^3.2.1",
+    "@vscode/vsce": "^3.9.2",
     "@vsrchat/config": "workspace:*",
-    "ovsx": "^0.10.1",
+    "ovsx": "^1.0.1",
     "tsup": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vitest": "catalog:"
   }
 }

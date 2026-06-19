@@ -5,6 +5,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded to latest stable dependencies: TypeScript 6, `@noble/curves` 2 +
+  `@noble/hashes` 2 (new import paths), `@vscode/vsce` 3.9, `ovsx` 1, vitest 4.
+
 ### Fixed
 
 - E2E key agreement: the extension now exchanges public keys with the phone via
