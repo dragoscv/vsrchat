@@ -68,19 +68,43 @@ function render(qr: string, payload: PairingPayload, shortCode: string): string 
   .pill { display:inline-block; margin-top: 14px; padding: 7px 14px; border-radius: 999px;
           font-size: 12px; color:#bdb8ff; background: rgba(124, 92, 255, .12);
           border: 1px solid rgba(124,92,255,.3); }
+  .status { margin-top: 18px; font-size: 13px; color: #a7a7c8; display:flex; gap:8px;
+            align-items:center; justify-content:center; }
+  .dot { width: 9px; height: 9px; border-radius: 999px; background: #fbbd23;
+         box-shadow: 0 0 10px #fbbd23; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .4; } }
+  .card.connected .qr, .card.connected .code, .card.connected .codelabel { opacity: .25; filter: grayscale(1); }
+  .success { display:none; }
+  .card.connected .success { display:block; animation: rise .4s ease; }
+  .card.connected .waiting { display:none; }
+  .success .big { font-size: 44px; margin: 8px 0; }
+  .success h2 { margin: 0 0 4px; font-size: 18px; color: #36d399; }
 </style>
 </head>
 <body>
-  <div class="card">
+  <div class="card" id="card">
     <h1>🛰️ Pair your phone</h1>
     <p class="sub">Scan with the VS Remote Chat PWA on your phone</p>
     <div class="qr"><img src="${qr}" alt="Pairing QR code" /></div>
     <div class="code">${escapeHtml(shortCode)}</div>
     <div class="codelabel">or enter this pairing code manually</div>
     <div class="pill">🔒 Locked to ${escapeHtml(lockedTo)}</div>
+    <div class="status waiting"><span class="dot"></span> Waiting for your phone…</div>
+    <div class="success">
+      <div class="big">✅</div>
+      <h2>Phone connected!</h2>
+      <p class="sub">You can close this tab — your phone is now in control.</p>
+    </div>
     <p class="hint">This QR contains your relay address and an end-to-end encryption key.
        It expires in 10 minutes. The relay never sees your messages in plaintext.</p>
   </div>
+  <script>
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'connected') {
+        document.getElementById('card').classList.add('connected');
+      }
+    });
+  </script>
 </body>
 </html>`;
 }

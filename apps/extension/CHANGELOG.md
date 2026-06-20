@@ -5,6 +5,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- The pairing QR panel now updates live to a **"Phone connected!"** state once
+  your phone completes the handshake, instead of showing the QR indefinitely.
+
 ### Fixed
 
 - Pairing/connection no longer gets stuck with

@@ -10,7 +10,7 @@ describe('RoomRegistry', () => {
   it('joins and counts members', () => {
     const r = new RoomRegistry(4);
     const a = member('ext');
-    expect(r.join('room-1', a)).toEqual({ ok: true, peers: 1 });
+    expect(r.join('room-1', a)).toEqual({ ok: true, peers: 1, evicted: [] });
     expect(r.count('room-1')).toBe(1);
   });
 
@@ -19,6 +19,17 @@ describe('RoomRegistry', () => {
     expect(r.join('room-1', member('ext')).ok).toBe(true);
     const res = r.join('room-1', member('pwa'));
     expect(res).toEqual({ ok: false, reason: 'room-full' });
+  });
+
+  it('evicts a stale same-role member on rejoin', () => {
+    const r = new RoomRegistry(4);
+    const a = member('ext');
+    const b = member('ext');
+    r.join('room-1', a);
+    const res = r.join('room-1', b);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.evicted).toEqual([a]);
+    expect(r.count('room-1')).toBe(1); // a replaced by b
   });
 
   it('returns other members only', () => {

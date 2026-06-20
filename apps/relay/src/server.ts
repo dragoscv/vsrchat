@@ -85,6 +85,15 @@ wss.on('connection', (ws: WebSocket) => {
         const result = rooms.join(f.room, member);
         if (!result.ok) return fail(ws, result.reason, 'Could not join room.');
 
+        // Close any stale same-role sockets that were just evicted.
+        for (const old of result.evicted) {
+          try {
+            old.socket.close(4000, 'superseded');
+          } catch {
+            /* ignore */
+          }
+        }
+
         state.member = member;
         state.room = f.room;
         send(ws, { t: 'joined', room: f.room, peers: result.peers });

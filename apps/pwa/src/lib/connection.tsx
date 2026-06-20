@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { deriveSharedKey } from '@vsrchat/crypto';
 import type { AppMessage, ExtMessage } from '@vsrchat/protocol';
 import { BrowserRelayClient } from './relay-client';
@@ -99,6 +100,14 @@ export function ConnectionProvider({
             void client.send({ k: 'agent.list' });
           }
           if (s === 'peer-offline' || s === 'closed') store.setPcOnline(false);
+        },
+        onError: (code, message) => {
+          const friendly: Record<string, string> = {
+            unauthorized: 'Sign-in mismatch: use the same GitHub account as VS Code.',
+            'room-full': 'This pairing is already in use. Re-pair from VS Code to get a fresh code.',
+            'protocol-mismatch': 'Version mismatch — update the VS Code extension and reload this app.',
+          };
+          toast.error(friendly[code] ?? `Relay error: ${message}`);
         },
       });
       clientRef.current = client;

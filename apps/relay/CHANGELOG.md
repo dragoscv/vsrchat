@@ -4,6 +4,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- A new socket for a given role (ext/pwa) now **evicts the stale one** in the
+    same room, preventing phantom "room-full" and stale-peer states caused by
+    reconnects or re-pairing leaving ghost sockets.
+
 ### Changed
 
 - Upgraded to latest stable dependencies: Hono 4.12, `@hono/node-server` 2,

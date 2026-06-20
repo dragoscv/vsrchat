@@ -17,9 +17,14 @@ export interface BrowserRelayOptions {
   ourPublicKey: string;
   onMessage: (msg: AppMessage) => void;
   onStatus: (status: RelayStatus) => void;
+  /** Surface a relay-level error (code + human message) to the UI. */
+  onError?: (code: string, message: string) => void;
 }
 
 export type RelayStatus = 'connecting' | 'online' | 'peer-online' | 'peer-offline' | 'closed' | 'error';
+
+/** Relay error codes that are permanent — reconnecting won't help. */
+const FATAL_CODES = new Set(['unauthorized', 'room-full', 'bad-frame', 'protocol-mismatch']);
 
 /**
  * Browser-side relay transport for the PWA. Encrypts every message before send,
@@ -31,11 +36,13 @@ export class BrowserRelayClient {
   private seq = 0;
   private backoff = 1000;
   private stopped = false;
+  private fatal = false;
 
   constructor(private readonly opts: BrowserRelayOptions) {}
 
   connect(): void {
     this.stopped = false;
+    this.fatal = false;
     this.opts.onStatus('connecting');
     const ws = new WebSocket(this.opts.relayUrl);
     this.ws = ws;
@@ -57,7 +64,7 @@ export class BrowserRelayClient {
 
     ws.onclose = () => {
       this.opts.onStatus('closed');
-      if (!this.stopped) this.scheduleReconnect();
+      if (!this.stopped && !this.fatal) this.scheduleReconnect();
     };
 
     ws.onerror = () => this.opts.onStatus('error');
@@ -80,6 +87,7 @@ export class BrowserRelayClient {
     }
     const obj = parsed as { t?: string; online?: boolean };
     if (obj.t === 'joined') {
+      this.backoff = 1000;
       // Only safe to send frames after the (async) join is accepted.
       this.sendKeyExchange();
       return this.opts.onStatus('online');
@@ -89,7 +97,13 @@ export class BrowserRelayClient {
       if (obj.online) this.sendKeyExchange();
       return this.opts.onStatus(obj.online ? 'peer-online' : 'peer-offline');
     }
-    if (obj.t === 'error') return this.opts.onStatus('error');
+    if (obj.t === 'error') {
+      const e = parsed as { code?: string; message?: string };
+      const code = e.code ?? 'error';
+      if (FATAL_CODES.has(code)) this.fatal = true; // stop the reconnect loop
+      this.opts.onError?.(code, e.message ?? 'Relay error');
+      return this.opts.onStatus('error');
+    }
     if (obj.t === 'pong') return;
     if (obj.t === 'kx') return; // extension's public key; PWA already has it from the QR.
 

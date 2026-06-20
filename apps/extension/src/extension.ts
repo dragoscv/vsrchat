@@ -35,6 +35,7 @@ class Controller {
   private relay?: RelayClient;
   private status: vscode.StatusBarItem;
   private pwaBaseUrl = 'https://vsrchat.dragoscatalin.ro';
+  private pairingPanel?: vscode.WebviewPanel;
 
   constructor(context: vscode.ExtensionContext) {
     this.pairingMgr = new PairingManager(context);
@@ -95,7 +96,10 @@ class Controller {
     }
     const pairing = await this.pairingMgr.create(identity.id, identity.login);
     const payload = this.pairingMgr.buildPayload(pairing, this.relayHttpUrl());
-    await showPairingPanel(payload, this.pwaBaseUrl, pairing.code);
+    this.pairingPanel = await showPairingPanel(payload, this.pwaBaseUrl, pairing.code);
+    this.pairingPanel.onDidDispose(() => {
+      this.pairingPanel = undefined;
+    });
     void vscode.window.showInformationMessage(
       `vsrchat: scan the QR or enter code ${pairing.code} in the PWA. Connecting…`,
     );
@@ -171,6 +175,8 @@ class Controller {
     const key = await this.pairingMgr.deriveKey(pairing);
     this.relay?.setKey(key);
     this.setStatus('phone');
+    // Flip the pairing QR panel to its "connected" state.
+    this.pairingPanel?.webview.postMessage({ type: 'connected' });
     await this.sendHello();
     this.pushSessions();
   }

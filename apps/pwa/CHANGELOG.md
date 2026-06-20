@@ -4,6 +4,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- Relay errors (e.g. `unauthorized`, `room-full`) are now surfaced as clear
+  toasts instead of leaving the app stuck on "Connecting…". The client also
+  stops its reconnect loop on fatal errors.
+
 ### Added
 
 - Sessions are **grouped by workspace** in the list (active workspace first,
