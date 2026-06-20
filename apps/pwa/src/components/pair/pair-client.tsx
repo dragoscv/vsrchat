@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
-import { PairingPayloadSchema } from '@vsrchat/protocol';
 import { createPairingFromPayload, decodePairingHash, savePairing } from '@/lib/pairing-store';
 
 export function PairClient() {
@@ -18,20 +17,9 @@ export function PairClient() {
       setStatus('manual');
       return;
     }
-    const parsed = PairingPayloadSchema.safeParse(payload);
-    if (!parsed.success) {
-      toast.error('Invalid pairing data.');
-      setStatus('manual');
-      return;
-    }
-    if (parsed.data.exp < Date.now()) {
-      toast.error('This pairing code has expired. Generate a new one in VS Code.');
-      setStatus('manual');
-      return;
-    }
-    const pairing = createPairingFromPayload(parsed.data);
+    const pairing = createPairingFromPayload(payload);
     savePairing(pairing);
-    setLogin(parsed.data.login);
+    setLogin(payload.login);
     setStatus('done');
     toast.success('Paired! Connecting…');
     setTimeout(() => router.replace('/app'), 1200);

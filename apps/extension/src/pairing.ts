@@ -1,13 +1,16 @@
 import * as vscode from 'vscode';
 import {
-  deriveRoomId,
   deriveSharedKey,
   generateKeyPair,
   randomPairingCode,
   randomSecret,
+  roomFromSecret,
   type KeyPair,
 } from '@vsrchat/crypto';
-import type { PairingPayload } from '@vsrchat/protocol';
+import type { CompactPairing, PairingPayload } from '@vsrchat/protocol';
+
+/** Default relay URL — kept in sync with the package.json setting default. */
+export const DEFAULT_RELAY_URL = 'wss://vsrchat-relay-246756727226.europe-west1.run.app/ws';
 
 const STORE_KEY = 'vsrchat.pairing';
 
@@ -48,10 +51,12 @@ export class PairingManager {
   }
 
   /** Create a fresh pairing (new keys, room, code) for a given GitHub identity. */
-  async create(githubId: string, login: string): Promise<StoredPairing> {
+  async create(_githubId: string, login: string): Promise<StoredPairing> {
     const keyPair = generateKeyPair();
     const salt = randomSecret(32);
-    const room = deriveRoomId(githubId, salt);
+    // Room derives from the secret alone so the phone can compute the same id
+    // from the QR without needing the GitHub user id (keeps the QR small).
+    const room = roomFromSecret(salt);
     const code = randomPairingCode(8);
     const pairing: StoredPairing = {
       keyPair,
@@ -82,5 +87,13 @@ export class PairingManager {
   async deriveKey(p: StoredPairing): Promise<CryptoKey> {
     if (!p.peerPublicKey) throw new Error('No peer public key yet.');
     return deriveSharedKey(p.keyPair.privateKey, p.peerPublicKey, p.salt);
+  }
+
+  /** Compact payload for the QR (small + easy to scan). */
+  buildCompactPayload(p: StoredPairing, relayHttpUrl: string): CompactPairing {
+    const out: CompactPairing = { k: p.keyPair.publicKey, s: p.salt };
+    // Only include the relay if it isn't the app's default (keeps QR small).
+    if (relayHttpUrl && relayHttpUrl !== DEFAULT_RELAY_URL) out.r = relayHttpUrl;
+    return out;
   }
 }

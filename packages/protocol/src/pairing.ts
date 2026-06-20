@@ -25,6 +25,19 @@ export const PairingPayloadSchema = z.object({
 });
 export type PairingPayload = z.infer<typeof PairingPayloadSchema>;
 
+/**
+ * Compact QR payload — the minimum needed to pair, to keep the QR low-density
+ * and easy to scan. Room is derived from the secret (roomFromSecret), the relay
+ * defaults to the app's configured relay, and login is display-only/omitted.
+ * Short keys: k = ext public key, s = pairing secret, r = optional relay.
+ */
+export const CompactPairingSchema = z.object({
+  k: z.string().min(1),
+  s: z.string().min(1),
+  r: z.string().min(1).optional(),
+});
+export type CompactPairing = z.infer<typeof CompactPairingSchema>;
+
 /** Short numeric/alpha pairing code (for camera-less pairing). */
 export const PAIRING_CODE_LENGTH = 8;
 export const PairingCodeSchema = z.string().length(PAIRING_CODE_LENGTH);

@@ -3,7 +3,7 @@ import { pairingProof } from '@vsrchat/crypto';
 import type { AppMessage, ExtMessage, PwaMessage } from '@vsrchat/protocol';
 import { resolveIdentity } from './auth.js';
 import { ChatRunner } from './chatRunner.js';
-import { PairingManager, type StoredPairing } from './pairing.js';
+import { DEFAULT_RELAY_URL, PairingManager, type StoredPairing } from './pairing.js';
 import { showPairingPanel } from './pairingPanel.js';
 import { injectIntoRealPanel } from './realPanel.js';
 import { RelayClient } from './relayClient.js';
@@ -71,10 +71,7 @@ class Controller {
   }
 
   private relayHttpUrl(): string {
-    return this.cfg<string>(
-      'relayUrl',
-      'wss://vsrchat-relay-246756727226.europe-west1.run.app/ws',
-    );
+    return this.cfg<string>('relayUrl', DEFAULT_RELAY_URL);
   }
 
   private setStatus(state: 'idle' | 'connecting' | 'online' | 'phone'): void {
@@ -96,8 +93,8 @@ class Controller {
       return;
     }
     const pairing = await this.pairingMgr.create(identity.id, identity.login);
-    const payload = this.pairingMgr.buildPayload(pairing, this.relayHttpUrl());
-    this.pairingPanel = await showPairingPanel(payload, this.pwaBaseUrl, pairing.code);
+    const compact = this.pairingMgr.buildCompactPayload(pairing, this.relayHttpUrl());
+    this.pairingPanel = await showPairingPanel(compact, this.pwaBaseUrl, pairing.code);
     this.pairingPanel.onDidDispose(() => {
       this.pairingPanel = undefined;
     });

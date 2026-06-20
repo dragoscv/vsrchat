@@ -7,6 +7,7 @@ import {
   pairingProof,
   randomPairingCode,
   randomSecret,
+  roomFromSecret,
   seal,
 } from './index.js';
 
@@ -65,5 +66,12 @@ describe('e2e crypto', () => {
     expect(pairingProof(secret)).not.toBe(pairingProof(other));
     // The proof must not leak the secret.
     expect(pairingProof(secret)).not.toBe(secret);
+  });
+
+  it('room-from-secret is deterministic and matches on both sides', () => {
+    const secret = randomSecret();
+    expect(roomFromSecret(secret)).toBe(roomFromSecret(secret));
+    expect(roomFromSecret(secret)).not.toBe(roomFromSecret(randomSecret()));
+    expect(roomFromSecret(secret)).toMatch(/^room-/);
   });
 });

@@ -5,6 +5,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- **Simpler QR code**: the pairing QR now encodes a compact payload (just the
+  public key + secret; the room is derived from the secret) with low error
+  correction and high contrast, so phone cameras scan it far more reliably.
+
 ### Added
 
 - The extension now **claims the pairing room** with its GitHub identity so the

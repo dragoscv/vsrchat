@@ -1,7 +1,11 @@
 'use client';
 
-import { generateKeyPair, type KeyPair } from '@vsrchat/crypto';
-import type { PairingPayload } from '@vsrchat/protocol';
+import { generateKeyPair, roomFromSecret, type KeyPair } from '@vsrchat/crypto';
+import { CompactPairingSchema, PairingPayloadSchema } from '@vsrchat/protocol';
+
+/** The relay the PWA uses unless a pairing overrides it. */
+const DEFAULT_RELAY =
+  process.env.NEXT_PUBLIC_RELAY_URL ?? 'wss://vsrchat-relay-246756727226.europe-west1.run.app/ws';
 
 const KEY = 'vsrchat.pairing.v1';
 
@@ -17,16 +21,50 @@ export interface PwaPairing {
   pairedAt: number;
 }
 
-/** Decode a pairing payload from the URL hash (base64url JSON). */
-export function decodePairingHash(hash: string): PairingPayload | null {
+/** A normalized pairing parsed from a QR/deep-link (compact or legacy full). */
+export interface ParsedPairing {
+  extPublicKey: string;
+  secret: string;
+  room: string;
+  relay: string;
+  login?: string;
+}
+
+/** Decode a pairing from the URL hash. Supports the compact and legacy forms. */
+export function decodePairingHash(hash: string): ParsedPairing | null {
   const raw = hash.replace(/^#/, '');
   if (!raw) return null;
+  let json: unknown;
   try {
-    const json = atob(raw.replace(/-/g, '+').replace(/_/g, '/'));
-    return JSON.parse(json) as PairingPayload;
+    json = JSON.parse(atob(raw.replace(/-/g, '+').replace(/_/g, '/')));
   } catch {
     return null;
   }
+
+  // Compact form: { k, s, r? }
+  const compact = CompactPairingSchema.safeParse(json);
+  if (compact.success) {
+    return {
+      extPublicKey: compact.data.k,
+      secret: compact.data.s,
+      room: roomFromSecret(compact.data.s),
+      relay: compact.data.r ?? DEFAULT_RELAY,
+    };
+  }
+
+  // Legacy full form: { v, relay, room, pub, secret, login?, exp }
+  const full = PairingPayloadSchema.safeParse(json);
+  if (full.success) {
+    if (typeof full.data.exp === 'number' && full.data.exp < Date.now()) return null;
+    return {
+      extPublicKey: full.data.pub,
+      secret: full.data.secret,
+      room: full.data.room,
+      relay: String(full.data.relay),
+      login: full.data.login,
+    };
+  }
+  return null;
 }
 
 /** Persist pairing locally (the private key never leaves the device). */
@@ -48,15 +86,15 @@ export function clearPairing(): void {
   localStorage.removeItem(KEY);
 }
 
-/** Create the PWA pairing record from a scanned/entered payload. */
-export function createPairingFromPayload(payload: PairingPayload): PwaPairing {
+/** Create the PWA pairing record from a parsed (compact or legacy) payload. */
+export function createPairingFromPayload(payload: ParsedPairing): PwaPairing {
   const keyPair = generateKeyPair();
   return {
     keyPair,
-    extPublicKey: payload.pub,
+    extPublicKey: payload.extPublicKey,
     salt: payload.secret,
     room: payload.room,
-    relay: typeof payload.relay === 'string' ? payload.relay : String(payload.relay),
+    relay: payload.relay,
     login: payload.login,
     pairedAt: Date.now(),
   };

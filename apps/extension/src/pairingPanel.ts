@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as QRCode from 'qrcode';
-import type { PairingPayload } from '@vsrchat/protocol';
+import type { CompactPairing } from '@vsrchat/protocol';
 
 /**
  * Shows a beautiful dark webview with the pairing QR code, the short code,
@@ -8,7 +8,7 @@ import type { PairingPayload } from '@vsrchat/protocol';
  * aesthetic.
  */
 export async function showPairingPanel(
-  payload: PairingPayload,
+  payload: CompactPairing,
   pwaBaseUrl: string,
   shortCode: string,
 ): Promise<vscode.WebviewPanel> {
@@ -22,17 +22,20 @@ export async function showPairingPanel(
   const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const deepLink = `${pwaBaseUrl}/pair#${encoded}`;
   const qrDataUrl = await QRCode.toDataURL(deepLink, {
-    margin: 1,
+    margin: 2,
     width: 320,
-    color: { dark: '#e7e7ff', light: '#00000000' },
+    // Low error correction = fewer modules = easier camera scan. The link is
+    // short-lived and shown on-screen, so resilience isn't critical.
+    errorCorrectionLevel: 'L',
+    color: { dark: '#000000', light: '#ffffff' },
   });
 
   panel.webview.html = render(qrDataUrl, payload, shortCode);
   return panel;
 }
 
-function render(qr: string, payload: PairingPayload, shortCode: string): string {
-  const lockedTo = payload.login ?? 'your account';
+function render(qr: string, _payload: CompactPairing, shortCode: string): string {
+  const lockedTo = 'your account';
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -58,8 +61,8 @@ function render(qr: string, payload: PairingPayload, shortCode: string): string 
   @keyframes rise { from { opacity:0; transform: translateY(14px) scale(.98);} to {opacity:1; transform:none;} }
   h1 { font-size: 18px; margin: 0 0 4px; letter-spacing: .2px; }
   p.sub { margin: 0 0 22px; color: #a7a7c8; font-size: 13px; }
-  .qr { padding: 16px; border-radius: 18px; background: rgba(255,255,255,0.03);
-        border: 1px solid rgba(140,130,255,0.14); display: inline-block; }
+    .qr { padding: 16px; border-radius: 18px; background: #ffffff;
+      border: 1px solid rgba(140,130,255,0.14); display: inline-block; }
   .qr img { display:block; width: 280px; height: 280px; }
   .code { margin: 22px 0 6px; font: 600 26px/1 ui-monospace, "SF Mono", Menlo, monospace;
           letter-spacing: 6px; color: #c9c4ff; }

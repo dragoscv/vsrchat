@@ -25,11 +25,8 @@ export function useConnection(): ConnectionApi {
 }
 
 export function ConnectionProvider({
-  authToken,
   children,
 }: {
-  /** Optional GitHub token (web fallback). Paired phones use the pairing proof. */
-  authToken?: string;
   children: React.ReactNode;
 }) {
   const clientRef = useRef<BrowserRelayClient | null>(null);
@@ -87,10 +84,11 @@ export function ConnectionProvider({
       const client = new BrowserRelayClient({
         relayUrl: pairing.relay,
         room: pairing.room,
-        // Scanning the QR is the proof of authorization — no GitHub login
-        // needed on the phone. Fall back to a GitHub token only if present.
+        // A paired device authorizes SOLELY via the pairing proof from the QR.
+        // We deliberately do NOT send the GitHub token here, because the relay
+        // prefers a token when present and would reject a phone signed into a
+        // different GitHub account ("mismatch"). The proof is sufficient.
         proof: pairingProof(pairing.salt),
-        authToken,
         key,
         ourPublicKey: pairing.keyPair.publicKey,
         onMessage: handleMessage,
@@ -118,7 +116,7 @@ export function ConnectionProvider({
       client.connect();
       setReady(true);
     },
-    [authToken, handleMessage, store],
+    [handleMessage, store],
   );
 
   useEffect(() => {

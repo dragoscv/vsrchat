@@ -8,11 +8,11 @@ import { Conversation } from './conversation';
 import { StatusBar } from './status-bar';
 import { ToolApprovals } from './tool-approvals';
 
-export function AppShell({ authToken, login }: { authToken?: string; login: string }) {
+export function AppShell({ login }: { login: string }) {
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
   return (
-    <ConnectionProvider authToken={authToken}>
+    <ConnectionProvider>
       <ShellInner login={login} mobileView={mobileView} setMobileView={setMobileView} />
     </ConnectionProvider>
   );

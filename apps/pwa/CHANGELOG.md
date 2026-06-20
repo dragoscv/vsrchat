@@ -4,6 +4,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **No more "sign-in mismatch" after scanning the QR.** A paired device now
+  authorizes purely with the pairing proof and never sends its (possibly
+  different) GitHub token to the relay. Scanning a fresh QR always re-pairs
+  cleanly, overwriting stale cached pairing.
+
+### Changed
+
+- Support the new compact QR payload (smaller, easier to scan); legacy QR codes
+  still work.
+
 ### Changed
 
 - **Fluid pairing**: scanning the QR now authorizes the phone via a pairing

@@ -99,6 +99,16 @@ export function deriveRoomId(githubUserId: string, saltB64: string): string {
 }
 
 /**
+ * Room id derived from the pairing secret alone. Both the extension (which made
+ * the secret) and the phone (which scanned it) can compute the same id without
+ * exchanging a github id, so it can be omitted from the QR to keep it small.
+ */
+export function roomFromSecret(secretB64: string): string {
+  const h = sha256(utf8ToBytes(`vsrchat-room:v1:${secretB64}`));
+  return 'room-' + bytesToBase64url(h.slice(0, 12));
+}
+
+/**
  * Derive a one-way pairing proof from the pairing secret. Both the extension
  * (which created the secret after a GitHub-verified sign-in) and the phone
  * (which scanned the QR containing the secret) can compute this. The relay
