@@ -32,9 +32,21 @@ export const RelayFrameSchema = z.discriminatedUnion('t', [
     protocol: z.literal(PROTOCOL_VERSION),
   }),
   /** Relay -> peer: join accepted. */
-  z.object({ t: z.literal('joined'), room: z.string(), peers: z.number().int().nonnegative() }),
+  z.object({
+    t: z.literal('joined'),
+    room: z.string(),
+    peers: z.number().int().nonnegative(),
+    /** This connection's stable peer id. */
+    pid: z.string().optional(),
+  }),
   /** Relay -> peer: the other peer connected/disconnected. */
-  z.object({ t: z.literal('peer'), role: PeerSchema, online: z.boolean() }),
+  z.object({
+    t: z.literal('peer'),
+    role: PeerSchema,
+    online: z.boolean(),
+    /** The peer id this notification refers to. */
+    pid: z.string().optional(),
+  }),
   /** Relay <-> peer: liveness. */
   z.object({ t: z.literal('ping') }),
   z.object({ t: z.literal('pong') }),
@@ -51,6 +63,13 @@ export const SealedEnvelopeSchema = z.object({
   t: z.literal('sealed'),
   room: z.string(),
   from: PeerSchema,
+  /**
+   * Stable per-connection peer id. Lets the extension keep a separate E2E key
+   * per phone and address a specific peer. Optional for backwards-compat.
+   */
+  pid: z.string().optional(),
+  /** Target a specific peer id (relay routes only to it). Omit = broadcast. */
+  to: z.string().optional(),
   /** base64url AES-GCM nonce (12 bytes). */
   nonce: z.string().min(1),
   /** base64url AES-GCM ciphertext (includes auth tag). */
@@ -70,6 +89,10 @@ export const KeyExchangeFrameSchema = z.object({
   t: z.literal('kx'),
   room: z.string(),
   from: PeerSchema,
+  /** Stable per-connection peer id of the sender. */
+  pid: z.string().optional(),
+  /** Target a specific peer id. Omit = broadcast to the room. */
+  to: z.string().optional(),
   /** base64url X25519 public key. */
   pub: z.string().min(1),
 });

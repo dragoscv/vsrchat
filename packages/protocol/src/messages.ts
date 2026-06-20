@@ -34,6 +34,8 @@ export const ChatMessageSchema = z.object({
   /** True while still streaming. */
   pending: z.boolean().optional(),
   model: z.string().optional(),
+  /** File references attached to / cited by this message (read-only). */
+  files: z.array(z.object({ name: z.string(), path: z.string() })).optional(),
 });
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
@@ -120,6 +122,7 @@ const fromPwa = {
   listTerminals: z.object({ k: z.literal('terminal.list') }),
   stopTerminal: z.object({ k: z.literal('terminal.stop'), id: z.string() }),
   stopTask: z.object({ k: z.literal('task.stop'), id: z.string() }),
+  getFile: z.object({ k: z.literal('file.get'), path: z.string() }),
   voice: z.object({ k: z.literal('voice.transcript'), sessionId: z.string().optional(), text: z.string() }),
 } as const;
 
@@ -138,6 +141,7 @@ export const PwaMessageSchema = z.discriminatedUnion('k', [
   fromPwa.listTerminals,
   fromPwa.stopTerminal,
   fromPwa.stopTask,
+  fromPwa.getFile,
   fromPwa.voice,
 ]);
 export type PwaMessage = z.infer<typeof PwaMessageSchema>;
@@ -173,6 +177,16 @@ const fromExt = {
   }),
   terminals: z.object({ k: z.literal('terminal.snapshot'), terminals: z.array(TerminalInfoSchema) }),
   terminalOutput: z.object({ k: z.literal('terminal.output'), id: z.string(), chunk: z.string() }),
+  file: z.object({
+    k: z.literal('file.snapshot'),
+    path: z.string(),
+    name: z.string(),
+    /** UTF-8 text content (truncated if very large). Omitted on error. */
+    text: z.string().optional(),
+    /** True if the content was truncated. */
+    truncated: z.boolean().optional(),
+    error: z.string().optional(),
+  }),
   notify: z.object({
     k: z.literal('notify'),
     title: z.string(),
@@ -194,6 +208,7 @@ export const ExtMessageSchema = z.discriminatedUnion('k', [
   fromExt.toolResolved,
   fromExt.terminals,
   fromExt.terminalOutput,
+  fromExt.file,
   fromExt.notify,
   fromExt.error,
 ]);

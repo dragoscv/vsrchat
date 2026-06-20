@@ -5,6 +5,10 @@ export interface RoomMember {
   socket: WebSocket;
   role: Peer;
   githubId: string;
+  /** Stable per-connection peer id (assigned by the server on join). */
+  pid: string;
+  /** Optional display label (e.g. device name). */
+  label?: string;
 }
 
 /**
@@ -41,14 +45,16 @@ export class RoomRegistry {
       set = new Set();
       this.rooms.set(room, set);
     }
-    // Single-user model: a new socket for a given role replaces any stale one
-    // (e.g. a reconnect or a re-pair left a ghost). This prevents phantom
-    // "room-full" and stale-peer states.
+    // The extension (`ext`) is single per room, so a new ext replaces a stale
+    // one (reconnect/re-pair ghost). Phones (`pwa`) are multi-device: many can
+    // join the same room, so we do NOT evict other phones.
     const evicted: RoomMember[] = [];
-    for (const m of set) {
-      if (m.role === member.role) {
-        evicted.push(m);
-        set.delete(m);
+    if (member.role === 'ext') {
+      for (const m of set) {
+        if (m.role === 'ext') {
+          evicted.push(m);
+          set.delete(m);
+        }
       }
     }
     if (set.size >= this.maxPeersPerRoom) {

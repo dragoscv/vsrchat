@@ -27,12 +27,17 @@ export interface RelayClientOptions {
 type Events = {
   connected: [];
   joined: [{ peers: number }];
-  peer: [{ role: Peer; online: boolean }];
-  keyExchange: [{ pub: string }];
+  peer: [{ role: Peer; online: boolean; pid?: string }];
+  keyExchange: [{ pub: string; pid?: string }];
   message: [AppMessage];
   error: [{ code: string; message: string }];
   closed: [{ code: number; reason: string }];
 };
+
+interface PeerState {
+  key: CryptoKey;
+  seq: number;
+}
 
 /**
  * Extension-side relay transport. Encrypts every AppMessage before sending and
@@ -42,10 +47,13 @@ export class RelayClient extends EventEmitter<Events> {
   private ws?: WebSocket;
   private seq = 0;
   private closedByUs = false;
+  /** Per-phone key state, keyed by the relay-assigned peer id (pid). */
+  private peers = new Map<string, PeerState>();
+  /** Fallback single key (legacy peers that don't send a pid). */
   private key?: CryptoKey;
   private backoff = 1000;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
-  /** Envelopes received before the key was ready; flushed by setKey(). */
+  /** Envelopes received before a usable key was ready; flushed by setKey(). */
   private pending: SealedEnvelope[] = [];
 
   constructor(private readonly opts: RelayClientOptions) {
@@ -53,19 +61,26 @@ export class RelayClient extends EventEmitter<Events> {
     this.key = opts.key;
   }
 
-  /** Set/replace the shared key once key exchange completes. */
-  setKey(key: CryptoKey): void {
-    this.key = key;
-    // Flush any envelopes that arrived before the key was derived.
+  /**
+   * Register the derived key for a specific phone (by pid). Falls back to a
+   * single shared key when no pid is provided (legacy single-phone path).
+   */
+  setKey(key: CryptoKey, pid?: string): void {
+    if (pid) this.peers.set(pid, { key, seq: 0 });
+    else this.key = key;
+    // Flush any envelopes that arrived before a key was available.
     const queued = this.pending;
     this.pending = [];
-    for (const env of queued) {
-      void this.decryptAndEmit(env);
-    }
+    for (const env of queued) void this.decryptAndEmit(env);
   }
 
   hasKey(): boolean {
-    return !!this.key;
+    return this.peers.size > 0 || !!this.key;
+  }
+
+  /** Forget a phone's key when it disconnects. */
+  dropPeer(pid: string): void {
+    this.peers.delete(pid);
   }
 
   connect(): void {
@@ -157,9 +172,14 @@ export class RelayClient extends EventEmitter<Events> {
       return void this.emit('joined', { peers: (parsed as { peers: number }).peers });
     }
     if (obj.t === 'peer') {
-      this.emit('peer', parsed as { role: Peer; online: boolean });
-      // Re-announce our key when a peer (re)connects.
-      if ((parsed as { online?: boolean }).online) this.sendKeyExchange();
+      const p = parsed as { role: Peer; online: boolean; pid?: string };
+      this.emit('peer', p);
+      if (p.online) {
+        // Re-announce our public key, targeted to the new peer if known.
+        this.sendKeyExchange(p.pid);
+      } else if (p.pid) {
+        this.dropPeer(p.pid);
+      }
       return;
     }
     if (obj.t === 'error') return void this.emit('error', parsed as { code: string; message: string });
@@ -167,14 +187,13 @@ export class RelayClient extends EventEmitter<Events> {
 
     const kx = KeyExchangeFrameSchema.safeParse(parsed);
     if (kx.success) {
-      return void this.emit('keyExchange', { pub: kx.data.pub });
+      return void this.emit('keyExchange', { pub: kx.data.pub, pid: kx.data.pid });
     }
 
     const env = SealedEnvelopeSchema.safeParse(parsed);
     if (env.success) {
-      if (!this.key) {
-        // Key not derived yet (kx still in flight). Buffer briefly so we don't
-        // lose the peer's first requests; flushed by setKey().
+      // Buffer until we have at least one key (kx may still be in flight).
+      if (this.peers.size === 0 && !this.key) {
         this.pending.push(env.data);
         return;
       }
@@ -183,16 +202,23 @@ export class RelayClient extends EventEmitter<Events> {
   }
 
   private async decryptAndEmit(env: SealedEnvelope): Promise<void> {
-    if (!this.key) return;
-    try {
-      const plaintext = await open(this.key, { nonce: env.nonce, ciphertext: env.ciphertext });
-      this.emit('message', JSON.parse(plaintext) as AppMessage);
-    } catch {
-      this.emit('error', { code: 'decrypt-failed', message: 'Could not decrypt an envelope.' });
+    // Prefer the key for the sending peer; fall back to trying all known keys.
+    const candidates: CryptoKey[] = [];
+    if (env.pid && this.peers.has(env.pid)) candidates.push(this.peers.get(env.pid)!.key);
+    for (const p of this.peers.values()) if (!candidates.includes(p.key)) candidates.push(p.key);
+    if (this.key && !candidates.includes(this.key)) candidates.push(this.key);
+    for (const key of candidates) {
+      try {
+        const plaintext = await open(key, { nonce: env.nonce, ciphertext: env.ciphertext });
+        return void this.emit('message', JSON.parse(plaintext) as AppMessage);
+      } catch {
+        /* try next key */
+      }
     }
+    this.emit('error', { code: 'decrypt-failed', message: 'Could not decrypt an envelope.' });
   }
 
-  private sendKeyExchange(): void {
+  private sendKeyExchange(to?: string): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     this.ws.send(
       JSON.stringify({
@@ -200,21 +226,45 @@ export class RelayClient extends EventEmitter<Events> {
         room: this.opts.room,
         from: this.opts.role,
         pub: this.opts.ourPublicKey,
+        ...(to ? { to } : {}),
       }),
     );
   }
 
-  /** Encrypt and send an application message to the peer(s). */
-  async send(msg: AppMessage): Promise<void> {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.key) return;
-    const sealed: Sealed = await seal(this.key, JSON.stringify(msg));
+  /**
+   * Encrypt and send an application message to every paired phone. Each phone
+   * has its own key, so we seal once per peer and target the envelope by pid.
+   * Optionally restrict to a single peer with `toPid`.
+   */
+  async send(msg: AppMessage, toPid?: string): Promise<void> {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    const plaintext = JSON.stringify(msg);
+
+    if (this.peers.size > 0) {
+      for (const [pid, st] of this.peers) {
+        if (toPid && pid !== toPid) continue;
+        const sealed: Sealed = await seal(st.key, plaintext);
+        this.sendEnvelope(sealed, st.seq++, pid);
+      }
+      return;
+    }
+    // Legacy single-key fallback.
+    if (this.key) {
+      const sealed: Sealed = await seal(this.key, plaintext);
+      this.sendEnvelope(sealed, this.seq++);
+    }
+  }
+
+  private sendEnvelope(sealed: Sealed, seq: number, to?: string): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     const env: SealedEnvelope = {
       t: 'sealed',
       room: this.opts.room,
       from: this.opts.role,
       nonce: sealed.nonce,
       ciphertext: sealed.ciphertext,
-      seq: this.seq++,
+      seq,
+      ...(to ? { to } : {}),
     };
     this.ws.send(JSON.stringify(env));
   }

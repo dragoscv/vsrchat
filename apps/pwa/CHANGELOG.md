@@ -4,6 +4,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Tabbed, swipeable sessions.** Open multiple chats as tabs, drag to reorder
+  them, close them, and **swipe left/right** anywhere on screen to switch — with
+  smooth spring animations and a sliding active-tab pill.
+- **Version + device status** in the header: the running web app version and the
+  connected extension version.
+- **Files in chat**: tap a file reference to view its content in a bottom sheet,
+  and **attach files** to a prompt from the composer.
+
 ### Fixed
 
 - **Empty session list after pairing.** The app now (re)requests sessions,

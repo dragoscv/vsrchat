@@ -1,4 +1,5 @@
 import { serve } from '@hono/node-server';
+import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
@@ -108,7 +109,8 @@ wss.on('connection', (ws: WebSocket) => {
           return fail(ws, 'unauthorized', 'No GitHub token or pairing proof provided.');
         }
 
-        const member: RoomMember = { socket: ws, role: f.role as Peer, githubId: identity.id };
+        const pid = randomUUID();
+        const member: RoomMember = { socket: ws, role: f.role as Peer, githubId: identity.id, pid };
         const result = rooms.join(f.room, member);
         if (!result.ok) return fail(ws, result.reason, 'Could not join room.');
 
@@ -123,13 +125,13 @@ wss.on('connection', (ws: WebSocket) => {
 
         state.member = member;
         state.room = f.room;
-        send(ws, { t: 'joined', room: f.room, peers: result.peers });
+        send(ws, { t: 'joined', room: f.room, peers: result.peers, pid });
 
         // Notify existing peers that a new peer is online, and tell the
         // newcomer who is already present.
         for (const other of rooms.others(f.room, member)) {
-          send(other.socket, { t: 'peer', role: member.role, online: true });
-          send(ws, { t: 'peer', role: other.role, online: true });
+          send(other.socket, { t: 'peer', role: member.role, online: true, pid: member.pid });
+          send(ws, { t: 'peer', role: other.role, online: true, pid: other.pid });
         }
         return;
       }
@@ -146,9 +148,12 @@ wss.on('connection', (ws: WebSocket) => {
       if (sealed.data.room !== state.room) {
         return fail(ws, 'room-mismatch', 'Envelope room does not match joined room.');
       }
+      // Stamp the sender's pid so peers can tell devices apart.
+      const out = { ...sealed.data, pid: state.member.pid };
       // The relay NEVER decrypts. It just relays the ciphertext to peers.
       for (const other of rooms.others(state.room, state.member)) {
-        send(other.socket, sealed.data);
+        if (out.to && other.pid !== out.to) continue; // targeted delivery
+        send(other.socket, out);
       }
       return;
     }
@@ -162,8 +167,10 @@ wss.on('connection', (ws: WebSocket) => {
       if (kx.data.room !== state.room) {
         return fail(ws, 'room-mismatch', 'Frame room does not match joined room.');
       }
+      const out = { ...kx.data, pid: state.member.pid };
       for (const other of rooms.others(state.room, state.member)) {
-        send(other.socket, kx.data);
+        if (out.to && other.pid !== out.to) continue;
+        send(other.socket, out);
       }
       return;
     }
@@ -174,7 +181,7 @@ wss.on('connection', (ws: WebSocket) => {
       const { room, member } = { room: state.room, member: state.member };
       rooms.leave(room, member);
       for (const other of rooms.others(room, member)) {
-        send(other.socket, { t: 'peer', role: member.role, online: false });
+        send(other.socket, { t: 'peer', role: member.role, online: false, pid: member.pid });
       }
     }
   });

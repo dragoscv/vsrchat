@@ -5,6 +5,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Multiple phones** can pair to one VS Code window, each with its own
+  end-to-end key (per-peer ECDH). The status bar shows how many phones are
+  connected.
+- **File requests**: phones can open referenced workspace files (read-only).
+
 ### Fixed
 
 - **Sessions now appear after pairing.** Fixed a key-handshake race where the

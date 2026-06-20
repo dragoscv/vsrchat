@@ -22,7 +22,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RelayConfig {
       .split(',')
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean),
-    maxPeersPerRoom: Number(env.VSRCHAT_MAX_PEERS ?? 4),
+    // 1 extension + several phones. Generous default for multi-device.
+    maxPeersPerRoom: Number(env.VSRCHAT_MAX_PEERS ?? 9),
     idleTimeoutMs: Number(env.VSRCHAT_IDLE_TIMEOUT_MS ?? 5 * 60_000),
   };
 }

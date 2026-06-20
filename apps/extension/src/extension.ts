@@ -37,6 +37,8 @@ class Controller {
   private status: vscode.StatusBarItem;
   private pwaBaseUrl = 'https://vsrchat.dragoscatalin.ro';
   private pairingPanel?: vscode.WebviewPanel;
+  /** Connected phone peer ids. */
+  private peerIds = new Set<string>();
 
   constructor(context: vscode.ExtensionContext) {
     this.pairingMgr = new PairingManager(context);
@@ -81,8 +83,22 @@ class Controller {
       online: '$(broadcast) vsrchat: waiting',
       phone: '$(device-mobile) vsrchat: phone',
     } as const;
-    this.status.text = map[state];
+      const n = this.peerIds.size;
+      if (state === 'phone' && n > 0) {
+        this.status.text = `$(device-mobile) vsrchat: ${n} phone${n > 1 ? 's' : ''}`;
+      } else {
+        this.status.text = map[state];
+      }
   }
+
+    /** Track connected phones and reflect the count in the status bar. */
+    private updatePeerCount(online: boolean, pid?: string): void {
+      if (pid) {
+        if (online) this.peerIds.add(pid);
+        else this.peerIds.delete(pid);
+      }
+      this.setStatus(this.peerIds.size > 0 ? 'phone' : this.relay?.isOpen() ? 'online' : 'idle');
+    }
 
   // ---- Commands ----
 
@@ -144,14 +160,11 @@ class Controller {
     });
 
     this.relay.on('joined', () => this.setStatus('online'));
-    this.relay.on('peer', ({ online }) => {
-      this.setStatus(online ? 'phone' : 'online');
-      if (online && this.relay?.hasKey()) {
-        void this.sendHello();
-        this.pushSessions();
-      }
+    this.relay.on('peer', ({ online, pid }) => {
+      this.updatePeerCount(online, pid);
+      // Greeting happens after key exchange (onKeyExchange), not here.
     });
-    this.relay.on('keyExchange', ({ pub }) => void this.onKeyExchange(pairing, pub));
+    this.relay.on('keyExchange', ({ pub, pid }) => void this.onKeyExchange(pairing, pub, pid));
     this.relay.on('message', (msg) => void this.onMessage(msg as PwaMessage));
     this.relay.on('error', ({ message }) => {
       void vscode.window.showErrorMessage(`vsrchat relay: ${message}`);
@@ -168,18 +181,25 @@ class Controller {
     }
   }
 
-  /** Complete ECDH once the phone announces its public key. */
-  private async onKeyExchange(pairing: StoredPairing, peerPub: string): Promise<void> {
-    if (peerPub === pairing.peerPublicKey && this.relay?.hasKey()) return;
-    pairing.peerPublicKey = peerPub;
-    await this.pairingMgr.save(pairing);
-    const key = await this.pairingMgr.deriveKey(pairing);
-    this.relay?.setKey(key);
+  /** Complete ECDH for a specific phone once it announces its public key. */
+  private async onKeyExchange(
+    pairing: StoredPairing,
+    peerPub: string,
+    pid?: string,
+  ): Promise<void> {
+    // Derive a per-phone key from this phone's public key + the pairing salt.
+    const key = await this.pairingMgr.deriveKeyFor(pairing, peerPub);
+    this.relay?.setKey(key, pid);
+    // Remember the most recent peer key (helps reconnects derive immediately).
+    if (peerPub !== pairing.peerPublicKey) {
+      pairing.peerPublicKey = peerPub;
+      await this.pairingMgr.save(pairing);
+    }
     this.setStatus('phone');
-    // Flip the pairing QR panel to its "connected" state.
     this.pairingPanel?.webview.postMessage({ type: 'connected' });
-    await this.sendHello();
-    this.pushSessions();
+    // Greet + seed data for THIS phone only.
+    await this.sendHello(pid);
+    this.pushSessions(pid);
   }
 
   async disconnect(): Promise<void> {
@@ -214,21 +234,21 @@ class Controller {
 
   // ---- Messaging ----
 
-  private push(msg: ExtMessage): void {
-    void this.relay?.send(msg as AppMessage);
+  private push(msg: ExtMessage, toPid?: string): void {
+    void this.relay?.send(msg as AppMessage, toPid);
   }
 
-  private async sendHello(): Promise<void> {
+  private async sendHello(toPid?: string): Promise<void> {
     const ext = vscode.extensions.getExtension('dragoscv.vsrchat');
     this.push({
       k: 'hello',
       machine: vscode.env.machineId.slice(0, 8),
       vscodeVersion: vscode.version,
       extVersion: (ext?.packageJSON?.version as string) ?? '0.0.0',
-    });
+    }, toPid);
   }
 
-  private pushSessions(): void {
+  private pushSessions(toPid?: string): void {
     const ws = currentWorkspace();
     const managed = this.chat.listSummaries().map((s) => ({
       ...s,
@@ -240,7 +260,35 @@ class Controller {
     const mirrored = this.cfg<boolean>('mirrorRealSessions', true)
       ? this.sessions.listSummaries()
       : [];
-    this.push({ k: 'sessions.snapshot', sessions: [...managed, ...mirrored] });
+    this.push({ k: 'sessions.snapshot', sessions: [...managed, ...mirrored] }, toPid);
+  }
+
+  /** Read a workspace file and send its (truncated) text to the phone. */
+  private async sendFile(reqPath: string): Promise<void> {
+    const MAX = 200_000; // ~200 KB cap to keep envelopes sane
+    const name = reqPath.split(/[\\/]/).pop() ?? reqPath;
+    try {
+      // Resolve relative paths against the first workspace folder.
+      let uri: vscode.Uri;
+      if (/^([a-zA-Z]:[\\/]|\/)/.test(reqPath)) {
+        uri = vscode.Uri.file(reqPath);
+      } else {
+        const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+        if (!root) throw new Error('No workspace folder open.');
+        uri = vscode.Uri.joinPath(root, reqPath);
+      }
+      const bytes = await vscode.workspace.fs.readFile(uri);
+      const truncated = bytes.byteLength > MAX;
+      const text = Buffer.from(bytes.slice(0, MAX)).toString('utf8');
+      this.push({ k: 'file.snapshot', path: reqPath, name, text, truncated });
+    } catch (e) {
+      this.push({
+        k: 'file.snapshot',
+        path: reqPath,
+        name,
+        error: e instanceof Error ? e.message : 'Could not read file.',
+      });
+    }
   }
 
   private async onMessage(msg: PwaMessage): Promise<void> {
@@ -290,6 +338,9 @@ class Controller {
         break;
       case 'voice.transcript':
         await this.chat.sendPrompt({ sessionId: msg.sessionId, text: msg.text });
+        break;
+      case 'file.get':
+        await this.sendFile(msg.path);
         break;
       case 'tool.approve':
       case 'tool.deny':

@@ -4,9 +4,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ConnectionProvider, useConnection } from '@/lib/connection';
 import { SessionList } from './session-list';
-import { Conversation } from './conversation';
 import { StatusBar } from './status-bar';
 import { ToolApprovals } from './tool-approvals';
+import { TabBar } from './tab-bar';
+import { SessionDeck } from './session-deck';
 
 export function AppShell({ login }: { login: string }) {
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
@@ -62,7 +63,10 @@ function ShellInner({
             <SessionList onOpen={() => setMobileView('chat')} />
           </aside>
           <section className={`pane chat ${mobileView === 'chat' ? 'show' : ''}`}>
-            <Conversation onBack={() => setMobileView('list')} />
+            <TabBar />
+            <div className="deckwrap">
+              <SessionDeck onBack={() => setMobileView('list')} />
+            </div>
           </section>
         </div>
         <ToolApprovals />
@@ -71,10 +75,14 @@ function ShellInner({
         .shell { min-height: 100dvh; display: flex; flex-direction: column; }
         .cols { flex: 1; display: grid; grid-template-columns: 340px 1fr; gap: 14px; padding: 14px; min-height: 0; }
         .pane { min-height: 0; }
+        .pane.chat { display: flex; flex-direction: column; min-height: 0; border-radius: 18px;
+                     overflow: hidden; border: 1px solid var(--color-border); background: rgba(255,255,255,.02); }
+        .deckwrap { flex: 1; min-height: 0; }
         @media (max-width: 820px) {
           .cols { grid-template-columns: 1fr; }
           .pane { display: none; }
           .pane.show { display: block; }
+          .pane.chat.show { display: flex; }
         }
       `}</style>
     </>

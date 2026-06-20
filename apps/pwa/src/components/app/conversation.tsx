@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { useVsr } from '@/lib/store';
 import { Composer } from './composer';
+import { FileChips } from './file-chips';
 
 export function Conversation({ onBack }: { onBack: () => void }) {
   const activeId = useVsr((s) => s.activeSessionId);
@@ -58,6 +59,7 @@ export function Conversation({ onBack }: { onBack: () => void }) {
               {m.text}
               {m.pending && <span className="caret">▋</span>}
             </div>
+            {m.files && m.files.length > 0 && <FileChips files={m.files} />}
           </motion.div>
         ))}
         {!detail?.messages.length && (

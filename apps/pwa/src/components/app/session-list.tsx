@@ -45,15 +45,15 @@ function groupByWorkspace(sessions: SessionSummary[]): WorkspaceGroup[] {
 export function SessionList({ onOpen }: { onOpen: () => void }) {
   const { send } = useConnection();
   const sessions = useVsr((s) => s.sessions);
-  const setActive = useVsr((s) => s.setActive);
+  const openTab = useVsr((s) => s.openTab);
   const active = useVsr((s) => s.activeSessionId);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const groups = useMemo(() => groupByWorkspace(sessions), [sessions]);
 
   const openSession = (id: string) => {
-    setActive(id);
-    send({ k: 'session.get', id });
+    openTab(id);
+    if (!useVsr.getState().details[id]) send({ k: 'session.get', id });
     onOpen();
   };
 

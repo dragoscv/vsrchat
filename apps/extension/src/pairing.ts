@@ -89,6 +89,11 @@ export class PairingManager {
     return deriveSharedKey(p.keyPair.privateKey, p.peerPublicKey, p.salt);
   }
 
+  /** Derive the shared key for a specific phone's public key. */
+  async deriveKeyFor(p: StoredPairing, peerPublicKey: string): Promise<CryptoKey> {
+    return deriveSharedKey(p.keyPair.privateKey, peerPublicKey, p.salt);
+  }
+
   /** Compact payload for the QR (small + easy to scan). */
   buildCompactPayload(p: StoredPairing, relayHttpUrl: string): CompactPairing {
     const out: CompactPairing = { k: p.keyPair.publicKey, s: p.salt };

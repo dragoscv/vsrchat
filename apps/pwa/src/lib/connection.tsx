@@ -44,6 +44,7 @@ export function ConnectionProvider({
           // key, so this is the safe moment to (re)request data — avoids a race
           // where our earlier requests arrived before the extension had the key.
           store.setPcOnline(true);
+          store.setPcInfo({ machine: m.machine, vscodeVersion: m.vscodeVersion, extVersion: m.extVersion });
           clientRef.current?.send({ k: 'sessions.list' });
           clientRef.current?.send({ k: 'models.list' });
           clientRef.current?.send({ k: 'agent.list' });
@@ -70,6 +71,9 @@ export function ConnectionProvider({
           break;
         case 'tool.resolved':
           store.resolveTool(m.id);
+          break;
+        case 'file.snapshot':
+          store.setFile(m.path, { name: m.name, text: m.text, truncated: m.truncated, error: m.error });
           break;
         case 'notify':
           void postLocalNotification(m.title, m.body);
