@@ -6,6 +6,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- **Empty session list after pairing.** The app now (re)requests sessions,
+  models, and agents when the extension confirms the connection (its `hello`),
+  so the initial data reliably loads instead of being lost to a key-handshake
+  race.
+
+### Fixed
+
 - **No more "sign-in mismatch" after scanning the QR.** A paired device now
   authorizes purely with the pairing proof and never sends its (possibly
   different) GitHub token to the relay. Scanning a fresh QR always re-pairs

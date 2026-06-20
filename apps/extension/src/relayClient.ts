@@ -45,6 +45,8 @@ export class RelayClient extends EventEmitter<Events> {
   private key?: CryptoKey;
   private backoff = 1000;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
+  /** Envelopes received before the key was ready; flushed by setKey(). */
+  private pending: SealedEnvelope[] = [];
 
   constructor(private readonly opts: RelayClientOptions) {
     super();
@@ -54,6 +56,12 @@ export class RelayClient extends EventEmitter<Events> {
   /** Set/replace the shared key once key exchange completes. */
   setKey(key: CryptoKey): void {
     this.key = key;
+    // Flush any envelopes that arrived before the key was derived.
+    const queued = this.pending;
+    this.pending = [];
+    for (const env of queued) {
+      void this.decryptAndEmit(env);
+    }
   }
 
   hasKey(): boolean {
@@ -164,16 +172,23 @@ export class RelayClient extends EventEmitter<Events> {
 
     const env = SealedEnvelopeSchema.safeParse(parsed);
     if (env.success) {
-      if (!this.key) return;
-      try {
-        const plaintext = await open(this.key, {
-          nonce: env.data.nonce,
-          ciphertext: env.data.ciphertext,
-        });
-        this.emit('message', JSON.parse(plaintext) as AppMessage);
-      } catch {
-        this.emit('error', { code: 'decrypt-failed', message: 'Could not decrypt an envelope.' });
+      if (!this.key) {
+        // Key not derived yet (kx still in flight). Buffer briefly so we don't
+        // lose the peer's first requests; flushed by setKey().
+        this.pending.push(env.data);
+        return;
       }
+      await this.decryptAndEmit(env.data);
+    }
+  }
+
+  private async decryptAndEmit(env: SealedEnvelope): Promise<void> {
+    if (!this.key) return;
+    try {
+      const plaintext = await open(this.key, { nonce: env.nonce, ciphertext: env.ciphertext });
+      this.emit('message', JSON.parse(plaintext) as AppMessage);
+    } catch {
+      this.emit('error', { code: 'decrypt-failed', message: 'Could not decrypt an envelope.' });
     }
   }
 

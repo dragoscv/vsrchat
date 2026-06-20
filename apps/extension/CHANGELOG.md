@@ -5,6 +5,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **Sessions now appear after pairing.** Fixed a key-handshake race where the
+  phone's first requests arrived before the extension derived the shared key and
+  were silently dropped. The extension now buffers early envelopes and flushes
+  them once the key is ready.
+
+### Added
+
+- A **"Copy pairing link"** button on the QR panel (useful for debugging or
+  pairing without a camera).
+
 ### Changed
 
 - **Simpler QR code**: the pairing QR now encodes a compact payload (just the

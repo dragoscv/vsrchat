@@ -39,6 +39,15 @@ export function ConnectionProvider({
     (msg: AppMessage) => {
       const m = msg as ExtMessage;
       switch (m.k) {
+        case 'hello':
+          // The extension only sends `hello` AFTER it has derived the shared
+          // key, so this is the safe moment to (re)request data — avoids a race
+          // where our earlier requests arrived before the extension had the key.
+          store.setPcOnline(true);
+          clientRef.current?.send({ k: 'sessions.list' });
+          clientRef.current?.send({ k: 'models.list' });
+          clientRef.current?.send({ k: 'agent.list' });
+          break;
         case 'sessions.snapshot':
           store.setSessions(m.sessions);
           if (keyRef.current) void cacheSessions(keyRef.current, m.sessions);

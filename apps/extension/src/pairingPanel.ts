@@ -30,11 +30,11 @@ export async function showPairingPanel(
     color: { dark: '#000000', light: '#ffffff' },
   });
 
-  panel.webview.html = render(qrDataUrl, payload, shortCode);
+  panel.webview.html = render(qrDataUrl, deepLink, shortCode);
   return panel;
 }
 
-function render(qr: string, _payload: CompactPairing, shortCode: string): string {
+function render(qr: string, deepLink: string, shortCode: string): string {
   const lockedTo = 'your account';
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -67,6 +67,10 @@ function render(qr: string, _payload: CompactPairing, shortCode: string): string
   .code { margin: 22px 0 6px; font: 600 26px/1 ui-monospace, "SF Mono", Menlo, monospace;
           letter-spacing: 6px; color: #c9c4ff; }
   .codelabel { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #7d7da0; }
+    .copy { margin-top: 14px; padding: 9px 16px; border-radius: 12px; cursor: pointer;
+      font-size: 13px; color: #c9c4ff; background: rgba(124,92,255,.14);
+      border: 1px solid rgba(124,92,255,.34); transition: background .15s; }
+    .copy:hover { background: rgba(124,92,255,.24); }
   .hint { margin-top: 22px; font-size: 12px; color: #8f8fb3; line-height: 1.5; }
   .pill { display:inline-block; margin-top: 14px; padding: 7px 14px; border-radius: 999px;
           font-size: 12px; color:#bdb8ff; background: rgba(124, 92, 255, .12);
@@ -91,6 +95,7 @@ function render(qr: string, _payload: CompactPairing, shortCode: string): string
     <div class="qr"><img src="${qr}" alt="Pairing QR code" /></div>
     <div class="code">${escapeHtml(shortCode)}</div>
     <div class="codelabel">or enter this pairing code manually</div>
+    <button class="copy" id="copy">📋 Copy pairing link</button>
     <div class="pill">🔒 Locked to ${escapeHtml(lockedTo)}</div>
     <div class="status waiting"><span class="dot"></span> Waiting for your phone…</div>
     <div class="success">
@@ -102,6 +107,17 @@ function render(qr: string, _payload: CompactPairing, shortCode: string): string
        It expires in 10 minutes. The relay never sees your messages in plaintext.</p>
   </div>
   <script>
+    const DEEP_LINK = ${JSON.stringify(deepLink)};
+    const copyBtn = document.getElementById('copy');
+    copyBtn?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(DEEP_LINK);
+        copyBtn.textContent = '✅ Copied!';
+        setTimeout(() => (copyBtn.textContent = '📋 Copy pairing link'), 1800);
+      } catch {
+        copyBtn.textContent = '⚠️ Copy failed';
+      }
+    });
     window.addEventListener('message', (e) => {
       if (e.data && e.data.type === 'connected') {
         document.getElementById('card').classList.add('connected');
