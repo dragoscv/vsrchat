@@ -17,8 +17,18 @@ export const RelayFrameSchema = z.discriminatedUnion('t', [
     t: z.literal('join'),
     room: z.string().min(8).max(128),
     role: PeerSchema,
-    /** GitHub OAuth token proof (verified server-side, then discarded). */
-    auth: z.string().min(1),
+    /**
+     * GitHub OAuth token (verified server-side, then discarded). Required for
+     * the peer that CLAIMS a room (the extension). Optional for a peer that
+     * joins via pairing proof (the phone after scanning the QR).
+     */
+    auth: z.string().min(1).optional(),
+    /**
+     * Pairing proof = hash of the pairing secret. The claimer (extension) sends
+     * it alongside `auth` to register the room's proof; a joiner (phone) sends
+     * it instead of `auth` to prove it scanned the QR.
+     */
+    proof: z.string().min(1).optional(),
     protocol: z.literal(PROTOCOL_VERSION),
   }),
   /** Relay -> peer: join accepted. */

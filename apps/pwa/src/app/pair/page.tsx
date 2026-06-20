@@ -1,9 +1,8 @@
-import { redirect } from 'next/navigation';
-import { auth } from '@/auth';
 import { PairClient } from '@/components/pair/pair-client';
 
-export default async function PairPage() {
-  const session = await auth();
-  if (!session) redirect('/login?callbackUrl=/pair');
+// No login gate: scanning the QR carries the pairing proof, which is all the
+// phone needs to authorize. Forcing a GitHub login here caused account
+// mismatches. Direct/manual pairing still works the same way.
+export default function PairPage() {
   return <PairClient />;
 }

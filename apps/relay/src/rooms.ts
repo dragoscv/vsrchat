@@ -13,8 +13,24 @@ export interface RoomMember {
  */
 export class RoomRegistry {
   private rooms = new Map<string, Set<RoomMember>>();
+  /**
+   * Per-room "claim": the pairing proof + the GitHub identity of the peer that
+   * created the room (the extension, after a verified GitHub sign-in). A phone
+   * that scanned the QR proves it belongs by presenting the same proof.
+   */
+  private claims = new Map<string, { proof: string; githubId: string; login: string }>();
 
   constructor(private readonly maxPeersPerRoom: number) {}
+
+  /** Register/refresh the room claim (called by the GitHub-verified claimer). */
+  setClaim(room: string, claim: { proof: string; githubId: string; login: string }): void {
+    this.claims.set(room, claim);
+  }
+
+  /** Look up a room claim, if one exists. */
+  getClaim(room: string): { proof: string; githubId: string; login: string } | undefined {
+    return this.claims.get(room);
+  }
 
   join(
     room: string,
@@ -46,7 +62,10 @@ export class RoomRegistry {
     const set = this.rooms.get(room);
     if (!set) return;
     set.delete(member);
-    if (set.size === 0) this.rooms.delete(room);
+    if (set.size === 0) {
+      this.rooms.delete(room);
+      this.claims.delete(room);
+    }
   }
 
   /** All members of a room except `self`. */

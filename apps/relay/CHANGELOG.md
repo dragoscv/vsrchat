@@ -4,6 +4,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Pairing-proof auth**: the extension claims a room with its GitHub identity +
+    a pairing proof; a phone that scanned the QR joins with just the proof — no
+    separate GitHub login on the phone. Eliminates account-mismatch errors.
+
 ### Fixed
 
 - A new socket for a given role (ext/pwa) now **evicts the stale one** in the

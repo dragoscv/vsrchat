@@ -14,8 +14,10 @@ export interface RelayClientOptions {
   relayUrl: string;
   room: string;
   role: Peer;
-  /** GitHub token for relay auth. */
-  authToken: string;
+  /** GitHub token for relay auth (the claimer/extension). */
+  authToken?: string;
+  /** Pairing proof — registers/refreshes the room claim. */
+  proof?: string;
   /** Shared AES-GCM key for E2E. May be undefined until key exchange completes. */
   key?: CryptoKey;
   /** Our X25519 public key, broadcast to the peer for ECDH. */
@@ -76,7 +78,8 @@ export class RelayClient extends EventEmitter<Events> {
           t: 'join',
           room: this.opts.room,
           role: this.opts.role,
-          auth: this.opts.authToken,
+          ...(this.opts.authToken ? { auth: this.opts.authToken } : {}),
+          ...(this.opts.proof ? { proof: this.opts.proof } : {}),
           protocol: PROTOCOL_VERSION,
         }),
       );

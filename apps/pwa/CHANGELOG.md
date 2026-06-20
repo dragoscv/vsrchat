@@ -4,6 +4,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- **Fluid pairing**: scanning the QR now authorizes the phone via a pairing
+  proof — no GitHub login required on the phone, so there's no account mismatch.
+  `/pair` and `/app` no longer force a sign-in; GitHub login remains a fallback
+  for direct web visits. Added a "Pair this device" prompt when unpaired.
+
 ### Fixed
 
 - Relay errors (e.g. `unauthorized`, `room-full`) are now surfaced as clear

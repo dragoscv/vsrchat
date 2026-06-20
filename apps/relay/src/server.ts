@@ -78,8 +78,35 @@ wss.on('connection', (ws: WebSocket) => {
       if (f.t === 'pong') return;
       if (f.t === 'join') {
         if (state.member) return fail(ws, 'already-joined', 'Socket already joined a room.');
-        const identity = await verifyGithubToken(f.auth, config);
-        if (!identity) return fail(ws, 'unauthorized', 'GitHub auth failed or not allowlisted.');
+
+        // Two ways to authorize a join:
+        //  1. GitHub token (the extension): verified against the allowlist. If a
+        //     `proof` is included, it becomes (or refreshes) the room's claim.
+        //  2. Pairing proof only (the phone after scanning the QR): must match
+        //     the room's existing claim — no separate GitHub login required.
+        let identity: { id: string; login: string } | null = null;
+        if (f.auth) {
+          identity = await verifyGithubToken(f.auth, config);
+          if (!identity) return fail(ws, 'unauthorized', 'GitHub auth failed or not allowlisted.');
+          if (f.proof) {
+            rooms.setClaim(f.room, { proof: f.proof, githubId: identity.id, login: identity.login });
+          }
+        } else if (f.proof) {
+          const claim = rooms.getClaim(f.room);
+          if (!claim) {
+            return fail(
+              ws,
+              'awaiting-claim',
+              'Pair from VS Code first so this device can join.',
+            );
+          }
+          if (claim.proof !== f.proof) {
+            return fail(ws, 'unauthorized', 'Pairing proof did not match this room.');
+          }
+          identity = { id: claim.githubId, login: claim.login };
+        } else {
+          return fail(ws, 'unauthorized', 'No GitHub token or pairing proof provided.');
+        }
 
         const member: RoomMember = { socket: ws, role: f.role as Peer, githubId: identity.id };
         const result = rooms.join(f.room, member);

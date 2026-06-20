@@ -7,6 +7,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- The extension now **claims the pairing room** with its GitHub identity so the
+  phone can join just by scanning the QR (no phone sign-in needed).
+
+### Added
+
 - The pairing QR panel now updates live to a **"Phone connected!"** state once
   your phone completes the handshake, instead of showing the QR indefinitely.
 

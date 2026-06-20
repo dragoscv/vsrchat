@@ -97,3 +97,17 @@ export function deriveRoomId(githubUserId: string, saltB64: string): string {
   const h = sha256(utf8ToBytes(`${githubUserId}:${saltB64}`));
   return 'room-' + bytesToBase64url(h.slice(0, 12));
 }
+
+/**
+ * Derive a one-way pairing proof from the pairing secret. Both the extension
+ * (which created the secret after a GitHub-verified sign-in) and the phone
+ * (which scanned the QR containing the secret) can compute this. The relay
+ * stores the extension's proof as the room "claim" and checks the phone's proof
+ * against it — so scanning the QR is sufficient to authorize the phone without a
+ * separate GitHub login. The proof is a hash, so the relay never learns the
+ * secret and cannot derive the E2E key (which also needs the private keys).
+ */
+export function pairingProof(secretB64: string): string {
+  const h = sha256(utf8ToBytes(`vsrchat-pair-proof:v1:${secretB64}`));
+  return bytesToBase64url(h);
+}

@@ -11,7 +11,10 @@ import { open, seal } from '@vsrchat/crypto';
 export interface BrowserRelayOptions {
   relayUrl: string;
   room: string;
-  authToken: string;
+  /** GitHub token (web fallback). Optional when a pairing proof is provided. */
+  authToken?: string;
+  /** Pairing proof from the scanned QR — authorizes without a phone login. */
+  proof?: string;
   key: CryptoKey;
   /** Our X25519 public key, broadcast to the extension for ECDH. */
   ourPublicKey: string;
@@ -54,7 +57,8 @@ export class BrowserRelayClient {
           t: 'join',
           room: this.opts.room,
           role: 'pwa',
-          auth: this.opts.authToken,
+          ...(this.opts.authToken ? { auth: this.opts.authToken } : {}),
+          ...(this.opts.proof ? { proof: this.opts.proof } : {}),
           protocol: PROTOCOL_VERSION,
         }),
       );
@@ -100,6 +104,11 @@ export class BrowserRelayClient {
     if (obj.t === 'error') {
       const e = parsed as { code?: string; message?: string };
       const code = e.code ?? 'error';
+      // Transient: the extension hasn't registered the room claim yet. Stay
+      // quiet and let the auto-reconnect retry until VS Code is ready.
+      if (code === 'awaiting-claim') {
+        return this.opts.onStatus('connecting');
+      }
       if (FATAL_CODES.has(code)) this.fatal = true; // stop the reconnect loop
       this.opts.onError?.(code, e.message ?? 'Relay error');
       return this.opts.onStatus('error');

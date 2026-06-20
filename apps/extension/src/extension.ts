@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { pairingProof } from '@vsrchat/crypto';
 import type { AppMessage, ExtMessage, PwaMessage } from '@vsrchat/protocol';
 import { resolveIdentity } from './auth.js';
 import { ChatRunner } from './chatRunner.js';
@@ -140,6 +141,9 @@ class Controller {
       authToken: token,
       key,
       ourPublicKey: pairing.keyPair.publicKey,
+      // The extension claims the room: GitHub token + pairing proof. The phone
+      // then joins with just the proof (from the QR), no separate login.
+      proof: pairingProof(pairing.salt),
     });
 
     this.relay.on('joined', () => this.setStatus('online'));

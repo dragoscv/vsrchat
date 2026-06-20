@@ -4,6 +4,7 @@ import {
   deriveSharedKey,
   generateKeyPair,
   open,
+  pairingProof,
   randomPairingCode,
   randomSecret,
   seal,
@@ -55,5 +56,14 @@ describe('e2e crypto', () => {
     const salt = randomSecret();
     expect(deriveRoomId('12345', salt)).toBe(deriveRoomId('12345', salt));
     expect(deriveRoomId('12345', salt)).not.toBe(deriveRoomId('99999', salt));
+  });
+
+  it('pairing proof is deterministic and secret-specific', () => {
+    const secret = randomSecret();
+    const other = randomSecret();
+    expect(pairingProof(secret)).toBe(pairingProof(secret));
+    expect(pairingProof(secret)).not.toBe(pairingProof(other));
+    // The proof must not leak the secret.
+    expect(pairingProof(secret)).not.toBe(secret);
   });
 });

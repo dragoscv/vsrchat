@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { deriveSharedKey } from '@vsrchat/crypto';
+import { deriveSharedKey, pairingProof } from '@vsrchat/crypto';
 import type { AppMessage, ExtMessage } from '@vsrchat/protocol';
 import { BrowserRelayClient } from './relay-client';
 import { cacheDetail, cacheSessions, readCachedSessions } from './cache';
@@ -28,7 +28,8 @@ export function ConnectionProvider({
   authToken,
   children,
 }: {
-  authToken: string;
+  /** Optional GitHub token (web fallback). Paired phones use the pairing proof. */
+  authToken?: string;
   children: React.ReactNode;
 }) {
   const clientRef = useRef<BrowserRelayClient | null>(null);
@@ -86,6 +87,9 @@ export function ConnectionProvider({
       const client = new BrowserRelayClient({
         relayUrl: pairing.relay,
         room: pairing.room,
+        // Scanning the QR is the proof of authorization — no GitHub login
+        // needed on the phone. Fall back to a GitHub token only if present.
+        proof: pairingProof(pairing.salt),
         authToken,
         key,
         ourPublicKey: pairing.keyPair.publicKey,
