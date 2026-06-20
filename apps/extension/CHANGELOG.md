@@ -5,10 +5,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **Extension Host no longer crashes when pairing a second phone.** Async relay
+  handlers are now guarded, a malformed/foreign public key can't take down the
+  host, and pairing again **reuses the existing room** so multiple phones share
+  one pairing (instead of creating a new room and stranding the first phone).
+
 ### Added
 
 - **Rename and delete** chats started from the phone (`session.rename` /
   `session.delete`); mirrored real Copilot sessions are protected from deletion.
+- **Cancel pairing**: a Cancel button on the QR panel, plus a command.
+- **Status bar menu**: clicking the status bar item now opens a quick menu
+  (pair, cancel, connect/disconnect, unpair) instead of a static dialog.
 
 ### Added
 

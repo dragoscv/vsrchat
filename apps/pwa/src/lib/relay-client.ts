@@ -89,7 +89,7 @@ export class BrowserRelayClient {
     } catch {
       return;
     }
-    const obj = parsed as { t?: string; online?: boolean };
+    const obj = parsed as { t?: string; online?: boolean; role?: string };
     if (obj.t === 'joined') {
       this.backoff = 1000;
       // Only safe to send frames after the (async) join is accepted.
@@ -97,7 +97,9 @@ export class BrowserRelayClient {
       return this.opts.onStatus('online');
     }
     if (obj.t === 'peer') {
-      // When the extension (re)connects, re-announce our public key.
+      // Only care about the EXTENSION peer. Other phones (role 'pwa') joining or
+      // leaving must not change our PC-connection state.
+      if (obj.role && obj.role !== 'ext') return;
       if (obj.online) this.sendKeyExchange();
       return this.opts.onStatus(obj.online ? 'peer-online' : 'peer-offline');
     }

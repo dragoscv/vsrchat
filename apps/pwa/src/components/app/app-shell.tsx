@@ -75,14 +75,18 @@ function ShellInner({
         .shell { min-height: 100dvh; display: flex; flex-direction: column; }
         .cols { flex: 1; display: grid; grid-template-columns: 340px 1fr; gap: 14px; padding: 14px; min-height: 0; }
         .pane { min-height: 0; }
-        .pane.chat { display: flex; flex-direction: column; min-height: 0; border-radius: 18px;
-                     overflow: hidden; border: 1px solid var(--color-border); background: rgba(255,255,255,.02); }
         .deckwrap { flex: 1; min-height: 0; }
+        @media (min-width: 821px) {
+          .pane.chat { display: flex; flex-direction: column; min-height: 0; border-radius: 18px;
+                       overflow: hidden; border: 1px solid var(--color-border); background: rgba(255,255,255,.02); }
+        }
         @media (max-width: 820px) {
           .cols { grid-template-columns: 1fr; }
           .pane { display: none; }
           .pane.show { display: block; }
-          .pane.chat.show { display: flex; }
+          .pane.chat.show { display: flex; flex-direction: column; min-height: 0;
+                            border-radius: 18px; overflow: hidden;
+                            border: 1px solid var(--color-border); background: rgba(255,255,255,.02); }
         }
       `}</style>
     </>

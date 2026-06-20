@@ -71,6 +71,12 @@ function render(qr: string, deepLink: string, shortCode: string): string {
       font-size: 13px; color: #c9c4ff; background: rgba(124,92,255,.14);
       border: 1px solid rgba(124,92,255,.34); transition: background .15s; }
     .copy:hover { background: rgba(124,92,255,.24); }
+    .cancel { margin-top: 10px; margin-left: 8px; padding: 9px 16px; border-radius: 12px;
+              cursor: pointer; font-size: 13px; color: #ff9a9a;
+              background: rgba(255,80,80,.1); border: 1px solid rgba(255,80,80,.3);
+              transition: background .15s; }
+    .cancel:hover { background: rgba(255,80,80,.2); }
+    .card.connected .cancel { display: none; }
   .hint { margin-top: 22px; font-size: 12px; color: #8f8fb3; line-height: 1.5; }
   .pill { display:inline-block; margin-top: 14px; padding: 7px 14px; border-radius: 999px;
           font-size: 12px; color:#bdb8ff; background: rgba(124, 92, 255, .12);
@@ -96,6 +102,7 @@ function render(qr: string, deepLink: string, shortCode: string): string {
     <div class="code">${escapeHtml(shortCode)}</div>
     <div class="codelabel">or enter this pairing code manually</div>
     <button class="copy" id="copy">📋 Copy pairing link</button>
+    <button class="cancel" id="cancel">✕ Cancel pairing</button>
     <div class="pill">🔒 Locked to ${escapeHtml(lockedTo)}</div>
     <div class="status waiting"><span class="dot"></span> Waiting for your phone…</div>
     <div class="success">
@@ -107,6 +114,7 @@ function render(qr: string, deepLink: string, shortCode: string): string {
        It expires in 10 minutes. The relay never sees your messages in plaintext.</p>
   </div>
   <script>
+    const vscodeApi = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : undefined;
     const DEEP_LINK = ${JSON.stringify(deepLink)};
     const copyBtn = document.getElementById('copy');
     copyBtn?.addEventListener('click', async () => {
@@ -117,6 +125,9 @@ function render(qr: string, deepLink: string, shortCode: string): string {
       } catch {
         copyBtn.textContent = '⚠️ Copy failed';
       }
+    });
+    document.getElementById('cancel')?.addEventListener('click', () => {
+      vscodeApi?.postMessage({ type: 'cancel' });
     });
     window.addEventListener('message', (e) => {
       if (e.data && e.data.type === 'connected') {

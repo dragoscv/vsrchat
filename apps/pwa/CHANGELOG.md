@@ -4,6 +4,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **Mobile: the session list (and New button) is now reachable.** A CSS
+  specificity bug made the empty chat pane cover the list on phones; the chat
+  pane now only shows when a session is open.
+- Other phones connecting/disconnecting no longer corrupt this device's
+  PC-connection state (only the extension peer is tracked).
+
 ### Added
 
 - **Session management**: rename and delete chats from the list (hover actions).

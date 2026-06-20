@@ -18,6 +18,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('vsrchat.connect', () => controller!.connect()),
     vscode.commands.registerCommand('vsrchat.disconnect', () => controller!.disconnect()),
     vscode.commands.registerCommand('vsrchat.unpair', () => controller!.unpair()),
+    vscode.commands.registerCommand('vsrchat.cancelPairing', () => controller!.cancelPairing()),
     vscode.commands.registerCommand('vsrchat.showStatus', () => controller!.showStatus()),
     { dispose: () => controller?.dispose() },
   );
@@ -108,16 +109,26 @@ class Controller {
       void vscode.window.showErrorMessage('vsrchat: GitHub sign-in is required to pair.');
       return;
     }
-    const pairing = await this.pairingMgr.create(identity.id, identity.login);
+    // Reuse the existing pairing so additional phones join the SAME room (one
+    // extension, many phones). Only create a new pairing if none exists yet.
+    let pairing = await this.pairingMgr.load();
+    if (!pairing) {
+      pairing = await this.pairingMgr.create(identity.id, identity.login);
+    }
     const compact = this.pairingMgr.buildCompactPayload(pairing, this.relayHttpUrl());
     this.pairingPanel = await showPairingPanel(compact, this.pwaBaseUrl, pairing.code);
     this.pairingPanel.onDidDispose(() => {
       this.pairingPanel = undefined;
     });
+    // The panel's "Cancel" button posts this message.
+    this.pairingPanel.webview.onDidReceiveMessage((m: { type?: string }) => {
+      if (m?.type === 'cancel') this.cancelPairing();
+    });
     void vscode.window.showInformationMessage(
       `vsrchat: scan the QR or enter code ${pairing.code} in the PWA. Connecting…`,
     );
-    await this.connect();
+    // Connect only if not already connected (a 2nd phone reuses the live socket).
+    if (!this.relay?.isOpen()) await this.connect();
   }
 
   async connect(): Promise<void> {
@@ -187,8 +198,14 @@ class Controller {
     peerPub: string,
     pid?: string,
   ): Promise<void> {
-    // Derive a per-phone key from this phone's public key + the pairing salt.
-    const key = await this.pairingMgr.deriveKeyFor(pairing, peerPub);
+    let key: CryptoKey;
+    try {
+      // Derive a per-phone key from this phone's public key + the pairing salt.
+      key = await this.pairingMgr.deriveKeyFor(pairing, peerPub);
+    } catch {
+      // A malformed/foreign public key must never crash the extension host.
+      return;
+    }
     this.relay?.setKey(key, pid);
     // Remember the most recent peer key (helps reconnects derive immediately).
     if (peerPub !== pairing.peerPublicKey) {
@@ -217,13 +234,70 @@ class Controller {
 
   async showStatus(): Promise<void> {
     const pairing = await this.pairingMgr.load();
-    const lines = [
-      `Relay: ${this.relayHttpUrl()}`,
-      `Paired: ${pairing ? `yes (${pairing.login ?? 'account'})` : 'no'}`,
-      `Connected: ${this.relay?.isOpen() ? 'yes' : 'no'}`,
-      `Send mode: ${this.cfg<string>('sendMode', 'managed')}`,
-    ];
-    void vscode.window.showInformationMessage('vsrchat status', { modal: true, detail: lines.join('\n') });
+    const connected = this.relay?.isOpen() ?? false;
+    const phones = this.peerIds.size;
+
+    interface Action extends vscode.QuickPickItem {
+      run: () => void | Promise<void>;
+    }
+    const items: Action[] = [];
+
+    items.push({
+      label: '$(device-mobile-plus) Pair a phone…',
+      detail: pairing ? 'Show a QR to add another phone to this window' : 'Connect your first phone',
+      run: () => this.pair(),
+    });
+
+    if (this.pairingPanel) {
+      items.push({
+        label: '$(close) Cancel pairing',
+        detail: 'Close the pairing QR panel',
+        run: () => this.cancelPairing(),
+      });
+    }
+    if (connected) {
+      items.push({
+        label: '$(debug-disconnect) Disconnect',
+        detail: `Stop relaying${phones ? ` (${phones} phone${phones > 1 ? 's' : ''} connected)` : ''}`,
+        run: () => this.disconnect(),
+      });
+    } else if (pairing) {
+      items.push({
+        label: '$(plug) Connect',
+        detail: 'Reconnect to the relay',
+        run: () => this.connect(),
+      });
+    }
+    if (pairing) {
+      items.push({
+        label: '$(trash) Unpair all devices',
+        detail: 'Remove the pairing and disconnect every phone',
+        run: () => this.unpair(),
+      });
+    }
+
+    const status = [
+      `$(broadcast) ${connected ? 'Connected' : 'Offline'}`,
+      pairing ? `paired (${pairing.login ?? 'account'})` : 'not paired',
+      phones ? `${phones} phone${phones > 1 ? 's' : ''}` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
+    const picked = await vscode.window.showQuickPick(items, {
+      title: 'VS Remote Chat',
+      placeHolder: status,
+    });
+    await picked?.run();
+  }
+
+  /** Close the pairing QR panel without unpairing existing devices. */
+  cancelPairing(): void {
+    if (this.pairingPanel) {
+      this.pairingPanel.dispose();
+      this.pairingPanel = undefined;
+      void vscode.window.showInformationMessage('vsrchat: pairing cancelled.');
+    }
   }
 
   async maybeAutoConnect(): Promise<void> {
@@ -292,6 +366,20 @@ class Controller {
   }
 
   private async onMessage(msg: PwaMessage): Promise<void> {
+    try {
+      await this.dispatch(msg);
+    } catch (e) {
+      // Never let a message handler crash the extension host.
+      console.error('[vsrchat] message handler error', e);
+      this.push({
+        k: 'error',
+        code: 'handler-error',
+        message: e instanceof Error ? e.message : 'Internal error.',
+      });
+    }
+  }
+
+  private async dispatch(msg: PwaMessage): Promise<void> {
     switch (msg.k) {
       case 'hello':
         await this.sendHello();

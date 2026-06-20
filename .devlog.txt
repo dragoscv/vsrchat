@@ -1,0 +1,70 @@
+
+> @vsrchat/pwa@0.1.9 dev E:\gh\vsrchat\apps\pwa
+> next dev -p 3030
+
+Γû▓ Next.js 16.2.9 (Turbopack)
+- Local:         http://localhost:3030
+- Network:       http://192.168.100.61:3030
+Γ£ô Ready in 649ms
+
+ GET /app 200 in 373ms (next.js: 158ms, application-code: 215ms)
+[auth][error] JWTSessionError: Read more at https://errors.authjs.dev#jwtsessionerror
+[auth][cause]: Error: no matching decryption secret
+    at clockTolerance (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:915:15)
+    at async flattenedDecrypt (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1_lr_jose_dist_webapi_0zwcwip._.js:3336:15)
+    at async compactDecrypt (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1_lr_jose_dist_webapi_0zwcwip._.js:3430:23)
+    at async jwtDecrypt (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1_lr_jose_dist_webapi_0zwcwip._.js:3464:23)
+    at async Object.decode (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:905:25)
+    at async Module.session (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:4546:29)
+    at async AuthInternal (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:5145:24)
+    at async Auth (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:5384:34)
+    at async AppPage (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\[root-of-the-server]__0rkttcq._.js:111:21)
+[auth][details]: {}
+ GET /app 200 in 65ms (next.js: 6ms, application-code: 59ms)
+ GET /manifest.webmanifest 200 in 75ms (next.js: 62ms, application-code: 13ms)
+[auth][error] JWTSessionError: Read more at https://errors.authjs.dev#jwtsessionerror
+[auth][cause]: Error: no matching decryption secret
+    at clockTolerance (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:915:15)
+    at async flattenedDecrypt (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1_lr_jose_dist_webapi_0zwcwip._.js:3336:15)
+    at async compactDecrypt (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1_lr_jose_dist_webapi_0zwcwip._.js:3430:23)
+    at async jwtDecrypt (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1_lr_jose_dist_webapi_0zwcwip._.js:3464:23)
+    at async Object.decode (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:905:25)
+    at async Module.session (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:4546:29)
+    at async AuthInternal (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:5145:24)
+    at async Auth (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:5384:34)
+    at async AppPage (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\[root-of-the-server]__0rkttcq._.js:111:21)
+[auth][details]: {}
+[auth][error] JWTSessionError: Read more at https://errors.authjs.dev#jwtsessionerror
+[auth][cause]: Error: no matching decryption secret
+    at clockTolerance (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:915:15)
+    at async flattenedDecrypt (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1_lr_jose_dist_webapi_0zwcwip._.js:3336:15)
+    at async compactDecrypt (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1_lr_jose_dist_webapi_0zwcwip._.js:3430:23)
+    at async jwtDecrypt (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1_lr_jose_dist_webapi_0zwcwip._.js:3464:23)
+    at async Object.decode (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:905:25)
+    at async Module.session (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:4546:29)
+    at async AuthInternal (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:5145:24)
+    at async Auth (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:5384:34)
+    at async Home (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\[root-of-the-server]__1mnlcps._.js:113:21)
+[auth][details]: {}
+ GET /offline 200 in 173ms (next.js: 96ms, application-code: 77ms)
+ GET /app 200 in 175ms (next.js: 3ms, application-code: 172ms)
+ GET / 200 in 178ms (next.js: 45ms, application-code: 133ms)
+ GET /app 200 in 33ms (next.js: 3ms, application-code: 30ms)
+[auth][error] JWTSessionError: Read more at https://errors.authjs.dev#jwtsessionerror
+[auth][cause]: Error: no matching decryption secret
+    at clockTolerance (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:915:15)
+    at async flattenedDecrypt (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1_lr_jose_dist_webapi_0zwcwip._.js:3336:15)
+    at async compactDecrypt (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1_lr_jose_dist_webapi_0zwcwip._.js:3430:23)
+    at async jwtDecrypt (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1_lr_jose_dist_webapi_0zwcwip._.js:3464:23)
+    at async Object.decode (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:905:25)
+    at async Module.session (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:4546:29)
+    at async AuthInternal (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:5145:24)
+    at async Auth (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\1423_@auth_core_1n4-kmw._.js:5384:34)
+    at async AppPage (E:\gh\vsrchat\apps\pwa\.next\dev\server\chunks\ssr\[root-of-the-server]__0rkttcq._.js:111:21)
+[auth][details]: {}
+ GET /app 200 in 29ms (next.js: 3ms, application-code: 27ms)
+ GET /manifest.webmanifest 200 in 4ms (next.js: 1403┬╡s, application-code: 3ms)
+[?25h
+E:\gh\vsrchat\apps\pwa:
+ΓÇëERR_PNPM_RECURSIVE_RUN_FIRST_FAILΓÇë @vsrchat/pwa@0.1.9 dev: `next dev -p 3030`
+Exit status 4294967295

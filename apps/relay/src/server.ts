@@ -127,9 +127,10 @@ wss.on('connection', (ws: WebSocket) => {
         state.room = f.room;
         send(ws, { t: 'joined', room: f.room, peers: result.peers, pid });
 
-        // Notify existing peers that a new peer is online, and tell the
-        // newcomer who is already present.
+        // Notify across roles only (ext<->pwa). Phones don't need to know about
+        // each other, and the extension tracks each phone.
         for (const other of rooms.others(f.room, member)) {
+          if (other.role === member.role) continue;
           send(other.socket, { t: 'peer', role: member.role, online: true, pid: member.pid });
           send(ws, { t: 'peer', role: other.role, online: true, pid: other.pid });
         }
@@ -152,6 +153,8 @@ wss.on('connection', (ws: WebSocket) => {
       const out = { ...sealed.data, pid: state.member.pid };
       // The relay NEVER decrypts. It just relays the ciphertext to peers.
       for (const other of rooms.others(state.room, state.member)) {
+        // Only deliver across roles (ext<->pwa); never phone<->phone or ext<->ext.
+        if (other.role === state.member.role) continue;
         if (out.to && other.pid !== out.to) continue; // targeted delivery
         send(other.socket, out);
       }
@@ -169,6 +172,7 @@ wss.on('connection', (ws: WebSocket) => {
       }
       const out = { ...kx.data, pid: state.member.pid };
       for (const other of rooms.others(state.room, state.member)) {
+        if (other.role === state.member.role) continue; // cross-role only
         if (out.to && other.pid !== out.to) continue;
         send(other.socket, out);
       }
@@ -181,6 +185,7 @@ wss.on('connection', (ws: WebSocket) => {
       const { room, member } = { room: state.room, member: state.member };
       rooms.leave(room, member);
       for (const other of rooms.others(room, member)) {
+        if (other.role === member.role) continue; // cross-role only
         send(other.socket, { t: 'peer', role: member.role, online: false, pid: member.pid });
       }
     }
