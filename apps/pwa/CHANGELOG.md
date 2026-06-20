@@ -6,6 +6,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Session management**: rename and delete chats from the list (hover actions).
+- **Unread badges** on tabs and in the session list when a chat updates while
+  you're viewing another.
+
+### Added
+
 - **Tabbed, swipeable sessions.** Open multiple chats as tabs, drag to reorder
   them, close them, and **swipe left/right** anywhere on screen to switch — with
   smooth spring animations and a sliding active-tab pill.

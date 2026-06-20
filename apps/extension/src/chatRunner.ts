@@ -74,6 +74,20 @@ export class ChatRunner {
     if (s) s.autoApprove = enabled;
   }
 
+  /** Rename a managed session. Returns true if it existed. */
+  renameSession(id: string, title: string): boolean {
+    const s = this.sessions.get(id);
+    if (!s) return false;
+    s.title = title.trim() || s.title;
+    s.updatedAt = Date.now();
+    return true;
+  }
+
+  /** Delete a managed session. Returns true if it existed. */
+  deleteSession(id: string): boolean {
+    return this.sessions.delete(id);
+  }
+
   async listModels(): Promise<ModelInfo[]> {
     try {
       const models = await vscode.lm.selectChatModels();

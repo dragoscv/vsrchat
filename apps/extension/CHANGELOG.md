@@ -7,6 +7,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **Rename and delete** chats started from the phone (`session.rename` /
+  `session.delete`); mirrored real Copilot sessions are protected from deletion.
+
+### Added
+
 - **Multiple phones** can pair to one VS Code window, each with its own
   end-to-end key (per-peer ECDH). The status bar shows how many phones are
   connected.

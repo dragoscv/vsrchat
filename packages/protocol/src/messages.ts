@@ -99,6 +99,8 @@ const fromPwa = {
     model: z.string().optional(),
     agent: z.string().optional(),
   }),
+  renameSession: z.object({ k: z.literal('session.rename'), id: z.string(), title: z.string() }),
+  deleteSession: z.object({ k: z.literal('session.delete'), id: z.string() }),
   sendPrompt: z.object({
     k: z.literal('prompt.send'),
     sessionId: z.string().optional(),
@@ -131,6 +133,8 @@ export const PwaMessageSchema = z.discriminatedUnion('k', [
   fromPwa.listSessions,
   fromPwa.getSession,
   fromPwa.newChat,
+  fromPwa.renameSession,
+  fromPwa.deleteSession,
   fromPwa.sendPrompt,
   fromPwa.cancelPrompt,
   fromPwa.listModels,
@@ -177,6 +181,7 @@ const fromExt = {
   }),
   terminals: z.object({ k: z.literal('terminal.snapshot'), terminals: z.array(TerminalInfoSchema) }),
   terminalOutput: z.object({ k: z.literal('terminal.output'), id: z.string(), chunk: z.string() }),
+  sessionRemoved: z.object({ k: z.literal('session.removed'), id: z.string() }),
   file: z.object({
     k: z.literal('file.snapshot'),
     path: z.string(),
@@ -208,6 +213,7 @@ export const ExtMessageSchema = z.discriminatedUnion('k', [
   fromExt.toolResolved,
   fromExt.terminals,
   fromExt.terminalOutput,
+  fromExt.sessionRemoved,
   fromExt.file,
   fromExt.notify,
   fromExt.error,

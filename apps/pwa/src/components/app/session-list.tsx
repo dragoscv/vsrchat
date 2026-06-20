@@ -47,6 +47,7 @@ export function SessionList({ onOpen }: { onOpen: () => void }) {
   const sessions = useVsr((s) => s.sessions);
   const openTab = useVsr((s) => s.openTab);
   const active = useVsr((s) => s.activeSessionId);
+  const unread = useVsr((s) => s.unread);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const groups = useMemo(() => groupByWorkspace(sessions), [sessions]);
@@ -59,6 +60,15 @@ export function SessionList({ onOpen }: { onOpen: () => void }) {
 
   const newChat = () => {
     send({ k: 'chat.new' });
+  };
+
+  const startRename = (id: string, current: string) => {
+    const title = window.prompt('Rename chat', current);
+    if (title && title.trim() && title !== current) send({ k: 'session.rename', id, title: title.trim() });
+  };
+
+  const doDelete = (id: string, title: string) => {
+    if (window.confirm(`Delete "${title}"? This can't be undone.`)) send({ k: 'session.delete', id });
   };
 
   const toggle = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
@@ -96,16 +106,18 @@ export function SessionList({ onOpen }: { onOpen: () => void }) {
                 .slice()
                 .sort((a, b) => b.updatedAt - a.updatedAt)
                 .map((s, i) => (
-          <motion.button
+          <motion.div
             key={s.id}
+            role="button"
+            tabIndex={0}
             onClick={() => openSession(s.id)}
-            className="glass-hover"
+            onKeyDown={(e) => { if (e.key === 'Enter') openSession(s.id); }}
+            className="glass-hover row"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: Math.min(i * 0.03, 0.3) }}
             style={{
-              textAlign: 'left',
-                      marginLeft: 10,
+              marginLeft: 10,
               background: active === s.id ? 'rgba(124,92,255,.14)' : 'rgba(255,255,255,.02)',
               border: `1px solid ${active === s.id ? 'var(--color-border-strong)' : 'var(--color-border)'}`,
               borderRadius: 14,
@@ -114,16 +126,27 @@ export function SessionList({ onOpen }: { onOpen: () => void }) {
               color: 'var(--color-fg)',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-              <span style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {s.title}
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                {unread[s.id] && <span className="dot" aria-label="Unread" />}
+                <span style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {s.title}
+                </span>
               </span>
-              <span className={`badge ${s.source}`}>{s.source === 'managed' ? 'live' : 'mirror'}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {s.source === 'managed' && (
+                  <>
+                    <button className="act" title="Rename" onClick={(e) => { e.stopPropagation(); startRename(s.id, s.title); }}>✎</button>
+                    <button className="act danger" title="Delete" onClick={(e) => { e.stopPropagation(); doDelete(s.id, s.title); }}>🗑</button>
+                  </>
+                )}
+                <span className={`badge ${s.source}`}>{s.source === 'managed' ? 'live' : 'mirror'}</span>
+              </span>
             </div>
             <div style={{ color: 'var(--color-fg-dim)', fontSize: 12, marginTop: 4 }}>
               {s.messageCount} messages · {new Date(s.updatedAt).toLocaleString()}
             </div>
-          </motion.button>
+          </motion.div>
                 ))}
           </div>
         ))}
@@ -134,6 +157,14 @@ export function SessionList({ onOpen }: { onOpen: () => void }) {
           color: #06060b; border: none; border-radius: 10px; padding: 6px 12px;
           font-size: 12px; font-weight: 700; cursor: pointer;
         }
+        .row .act { opacity: 0; background: transparent; border: none; cursor: pointer;
+          color: var(--color-fg-dim); font-size: 13px; padding: 2px 4px; border-radius: 6px;
+          transition: opacity .15s, background .15s; }
+        .row:hover .act, .row:focus-within .act { opacity: 1; }
+        .row .act:hover { background: rgba(255,255,255,.08); color: var(--color-fg); }
+        .row .act.danger:hover { background: rgba(255,80,80,.16); color: #ff8a8a; }
+        .dot { width: 7px; height: 7px; border-radius: 999px; flex: 0 0 auto;
+          background: var(--color-accent-2, #2bd4ff); box-shadow: 0 0 8px var(--color-accent-2, #2bd4ff); }
         .ws-header {
           display: flex; align-items: center; justify-content: space-between; gap: 8;
           width: 100%; background: rgba(255,255,255,.03); color: var(--color-fg);

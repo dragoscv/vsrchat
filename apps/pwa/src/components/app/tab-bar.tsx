@@ -12,6 +12,7 @@ export function TabBar() {
   const tabs = useVsr((s) => s.tabs);
   const sessions = useVsr((s) => s.sessions);
   const active = useVsr((s) => s.activeSessionId);
+  const unread = useVsr((s) => s.unread);
   const setActive = useVsr((s) => s.setActive);
   const closeTab = useVsr((s) => s.closeTab);
   const reorderTabs = useVsr((s) => s.reorderTabs);
@@ -61,6 +62,7 @@ export function TabBar() {
               {active === id && (
                 <motion.span layoutId="tab-pill" className="pill" transition={{ type: 'spring', stiffness: 500, damping: 34 }} />
               )}
+              {unread[id] && active !== id && <span className="unread" aria-label="Unread" />}
               <span className="label">{title(id)}</span>
               <button
                 className="x"
@@ -93,6 +95,9 @@ export function TabBar() {
         .tab:active { cursor: grabbing; }
         .tab .label { position: relative; z-index: 1; font-size: 13px; overflow: hidden;
                       text-overflow: ellipsis; max-width: 130px; }
+        .unread { position: relative; z-index: 1; width: 7px; height: 7px; border-radius: 999px;
+            background: var(--color-accent-2, #2bd4ff); box-shadow: 0 0 8px var(--color-accent-2, #2bd4ff);
+            flex: 0 0 auto; }
         .tab.active { border-color: var(--color-border-strong); }
         .pill { position: absolute; inset: 0; border-radius: 12px; z-index: 0;
                 background: linear-gradient(100deg, rgba(124,92,255,.26), rgba(43,212,255,.18));

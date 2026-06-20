@@ -26,6 +26,8 @@ interface VsrState {
   files: Record<string, { name: string; text?: string; truncated?: boolean; error?: string }>;
   /** Info about the connected extension/PC (from its hello). */
   pcInfo?: { machine: string; vscodeVersion: string; extVersion: string };
+  /** Session ids with unread activity (delta arrived while not active). */
+  unread: Record<string, boolean>;
 
   setStatus: (s: RelayStatus | 'idle') => void;
   setPcOnline: (online: boolean) => void;
@@ -42,6 +44,8 @@ interface VsrState {
   reorderTabs: (from: number, to: number) => void;
   setFile: (path: string, file: { name: string; text?: string; truncated?: boolean; error?: string }) => void;
   setPcInfo: (info: { machine: string; vscodeVersion: string; extVersion: string }) => void;
+  removeSession: (id: string) => void;
+  clearUnread: (id: string) => void;
 }
 
 export const useVsr = create<VsrState>((set) => ({
@@ -54,6 +58,7 @@ export const useVsr = create<VsrState>((set) => ({
   pendingTools: [],
   tabs: [],
   files: {},
+  unread: {},
 
   setStatus: (status) => set({ status }),
   setPcOnline: (pcOnline) => set({ pcOnline }),
@@ -68,7 +73,9 @@ export const useVsr = create<VsrState>((set) => ({
       if (!activeSessionId) return { activeSessionId };
       // Ensure the active session has a tab.
       const tabs = s.tabs.includes(activeSessionId) ? s.tabs : [...s.tabs, activeSessionId];
-      return { activeSessionId, tabs };
+      const unread = { ...s.unread };
+      delete unread[activeSessionId];
+      return { activeSessionId, tabs, unread };
     }),
 
   openTab: (id) =>
@@ -102,6 +109,33 @@ export const useVsr = create<VsrState>((set) => ({
 
   setPcInfo: (pcInfo) => set({ pcInfo }),
 
+  removeSession: (id) =>
+    set((s) => {
+      const details = { ...s.details };
+      delete details[id];
+      const unread = { ...s.unread };
+      delete unread[id];
+      const idx = s.tabs.indexOf(id);
+      const tabs = s.tabs.filter((t) => t !== id);
+      let activeSessionId = s.activeSessionId;
+      if (activeSessionId === id) activeSessionId = tabs[Math.min(idx, tabs.length - 1)];
+      return {
+        sessions: s.sessions.filter((x) => x.id !== id),
+        details,
+        unread,
+        tabs,
+        activeSessionId,
+      };
+    }),
+
+  clearUnread: (id) =>
+    set((s) => {
+      if (!s.unread[id]) return s;
+      const unread = { ...s.unread };
+      delete unread[id];
+      return { unread };
+    }),
+
   appendDelta: (sessionId, messageId, chunk, done, model) =>
     set((s) => {
       const detail = s.details[sessionId];
@@ -132,6 +166,9 @@ export const useVsr = create<VsrState>((set) => ({
           ...s.details,
           [sessionId]: { ...detail, messages, updatedAt: Date.now() },
         },
+        // Mark unread if the update is for a session that isn't currently active.
+        unread:
+          sessionId !== s.activeSessionId ? { ...s.unread, [sessionId]: true } : s.unread,
       };
     }),
 }));

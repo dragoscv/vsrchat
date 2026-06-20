@@ -75,6 +75,9 @@ export function ConnectionProvider({
         case 'file.snapshot':
           store.setFile(m.path, { name: m.name, text: m.text, truncated: m.truncated, error: m.error });
           break;
+        case 'session.removed':
+          store.removeSession(m.id);
+          break;
         case 'notify':
           void postLocalNotification(m.title, m.body);
           break;

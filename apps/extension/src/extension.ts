@@ -312,6 +312,35 @@ class Controller {
         this.pushSessions();
         break;
       }
+      case 'session.rename': {
+        const ok = this.chat.renameSession(msg.id, msg.title);
+        if (!ok) {
+          this.push({
+            k: 'error',
+            code: 'rename-unsupported',
+            message: 'Only chats started from your phone can be renamed.',
+          });
+        } else {
+          const d = this.chat.getDetail(msg.id);
+          if (d) this.push({ k: 'session.snapshot', session: d });
+          this.pushSessions();
+        }
+        break;
+      }
+      case 'session.delete': {
+        const ok = this.chat.deleteSession(msg.id);
+        if (!ok) {
+          this.push({
+            k: 'error',
+            code: 'delete-unsupported',
+            message: 'Only chats started from your phone can be deleted.',
+          });
+        } else {
+          this.push({ k: 'session.removed', id: msg.id });
+          this.pushSessions();
+        }
+        break;
+      }
       case 'prompt.send': {
         const useRealPanel = msg.realPanel ?? this.cfg<string>('sendMode', 'managed') === 'realPanel';
         if (useRealPanel) {
