@@ -33,7 +33,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/web-push": "^3.6.4",
     "@vsrchat/config": "workspace:*",
-    "eslint": "^9.39.4",
+    "eslint": "^10.6.0",
     "eslint-config-next": "^16.2.9",
     "sharp": "^0.35.1",
     "tailwindcss": "^4.3.1",
