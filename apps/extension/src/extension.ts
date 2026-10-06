@@ -77,6 +77,12 @@ class Controller {
     return this.cfg<string>('relayUrl', DEFAULT_RELAY_URL);
   }
 
+  /** Stable id for THIS window (per workspace), used for relay ghost eviction. */
+  private windowClientId(): string {
+    const ws = currentWorkspace();
+    return `ext-${vscode.env.machineId.slice(0, 8)}-${ws.id ?? 'nows'}`;
+  }
+
   private setStatus(state: 'idle' | 'connecting' | 'online' | 'phone'): void {
     const map = {
       idle: '$(broadcast) vsrchat',
@@ -168,6 +174,9 @@ class Controller {
       // The extension claims the room: GitHub token + pairing proof. The phone
       // then joins with just the proof (from the QR), no separate login.
       proof: pairingProof(pairing.salt),
+      // Stable per-window client id so the relay evicts only THIS window's
+      // reconnect ghosts, letting multiple windows coexist as peers.
+      cid: this.windowClientId(),
     });
 
     this.relay.on('joined', () => this.setStatus('online'));
@@ -331,8 +340,12 @@ class Controller {
       workspacePath: ws.path,
       isActiveWorkspace: true,
     }));
+    // Each window reports only ITS OWN workspace's mirrored sessions, so the
+    // phone naturally sees exactly the set of currently-open workspaces (one
+    // connected extension peer per VS Code window).
+    const ownWorkspaceOnly = this.cfg<boolean>('ownWorkspaceOnly', true);
     const mirrored = this.cfg<boolean>('mirrorRealSessions', true)
-      ? this.sessions.listSummaries()
+      ? this.sessions.listSummaries(ownWorkspaceOnly)
       : [];
     this.push({ k: 'sessions.snapshot', sessions: [...managed, ...mirrored] }, toPid);
   }

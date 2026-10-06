@@ -8,6 +8,9 @@ import { StatusBar } from './status-bar';
 import { ToolApprovals } from './tool-approvals';
 import { TabBar } from './tab-bar';
 import { SessionDeck } from './session-deck';
+import { CommandPalette } from './command-palette';
+import { useEffect } from 'react';
+import { useVsr } from '@/lib/store';
 
 export function AppShell({ login }: { login: string }) {
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
@@ -29,6 +32,30 @@ function ShellInner({
   setMobileView: (v: 'list' | 'chat') => void;
 }) {
   const { paired } = useConnection();
+  const { send } = useConnection();
+
+  // Global keyboard shortcuts (desktop).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA';
+      const { tabs, activeSessionId, setActive, closeTab } = useVsr.getState();
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        send({ k: 'chat.new' });
+      } else if (!typing && (e.key === '[' || e.key === ']') && activeSessionId) {
+        const i = tabs.indexOf(activeSessionId);
+        if (i >= 0) {
+          const next = e.key === ']' ? Math.min(i + 1, tabs.length - 1) : Math.max(i - 1, 0);
+          setActive(tabs[next]);
+        }
+      } else if (!typing && e.key.toLowerCase() === 'w' && activeSessionId) {
+        closeTab(activeSessionId);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [send]);
 
   if (!paired) {
     return (
@@ -70,25 +97,64 @@ function ShellInner({
           </section>
         </div>
         <ToolApprovals />
+        <MobileBar mobileView={mobileView} setMobileView={setMobileView} />
+        <CommandPalette />
       </div>
       <style>{`
-        .shell { min-height: 100dvh; display: flex; flex-direction: column; }
-        .cols { flex: 1; display: grid; grid-template-columns: 340px 1fr; gap: 14px; padding: 14px; min-height: 0; }
-        .pane { min-height: 0; }
+        .shell { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+        .cols { flex: 1; min-height: 0; display: grid;
+          grid-template-columns: clamp(280px, 30vw, 380px) 1fr; gap: 14px; padding: 14px; }
+        .pane { min-height: 0; min-width: 0; }
         .deckwrap { flex: 1; min-height: 0; }
-        @media (min-width: 821px) {
-          .pane.chat { display: flex; flex-direction: column; min-height: 0; border-radius: 18px;
-                       overflow: hidden; border: 1px solid var(--color-border); background: rgba(255,255,255,.02); }
-        }
+        .pane.chat { display: flex; flex-direction: column; min-height: 0; min-width: 0;
+          border-radius: 18px; overflow: hidden; border: 1px solid var(--color-border);
+          background: rgba(255,255,255,.02); }
         @media (max-width: 820px) {
-          .cols { grid-template-columns: 1fr; }
+          .cols { grid-template-columns: 1fr; padding: 10px; gap: 10px; }
           .pane { display: none; }
-          .pane.show { display: block; }
-          .pane.chat.show { display: flex; flex-direction: column; min-height: 0;
-                            border-radius: 18px; overflow: hidden;
-                            border: 1px solid var(--color-border); background: rgba(255,255,255,.02); }
+          .pane.list.show { display: block; }
+          .pane.chat.show { display: flex; }
         }
       `}</style>
     </>
+  );
+}
+
+/** Bottom navigation bar — only shown on mobile. */
+function MobileBar({
+  mobileView,
+  setMobileView,
+}: {
+  mobileView: 'list' | 'chat';
+  setMobileView: (v: 'list' | 'chat') => void;
+}) {
+  const { send } = useConnection();
+  const tabs = useVsr((s) => s.tabs);
+  const haptic = () => navigator.vibrate?.(8);
+  return (
+    <nav className="mbar">
+      <button className={mobileView === 'list' ? 'on' : ''} onClick={() => { haptic(); setMobileView('list'); }}>
+        <span>🗂️</span>Sessions
+      </button>
+      <button onClick={() => { haptic(); send({ k: 'chat.new' }); setMobileView('chat'); }}>
+        <span>＋</span>New
+      </button>
+      <button className={mobileView === 'chat' ? 'on' : ''} onClick={() => { haptic(); setMobileView('chat'); }} disabled={!tabs.length}>
+        <span>💬</span>Chat
+      </button>
+      <style>{`
+        .mbar { display: none; }
+        @media (max-width: 820px) {
+          .mbar { display: flex; gap: 4px; padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+            border-top: 1px solid var(--color-border); background: var(--color-bg-soft); }
+          .mbar button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+            background: transparent; border: none; color: var(--color-fg-dim); font-size: 11px;
+            padding: 6px; border-radius: 10px; cursor: pointer; }
+          .mbar button span { font-size: 18px; }
+          .mbar button.on { color: var(--color-fg); background: rgba(124,92,255,.14); }
+          .mbar button:disabled { opacity: .4; }
+        }
+      `}</style>
+    </nav>
   );
 }

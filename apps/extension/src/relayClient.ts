@@ -18,6 +18,8 @@ export interface RelayClientOptions {
   authToken?: string;
   /** Pairing proof — registers/refreshes the room claim. */
   proof?: string;
+  /** Stable per-window client id (ghost eviction on reconnect). */
+  cid?: string;
   /** Shared AES-GCM key for E2E. May be undefined until key exchange completes. */
   key?: CryptoKey;
   /** Our X25519 public key, broadcast to the peer for ECDH. */
@@ -103,6 +105,7 @@ export class RelayClient extends EventEmitter<Events> {
           role: this.opts.role,
           ...(this.opts.authToken ? { auth: this.opts.authToken } : {}),
           ...(this.opts.proof ? { proof: this.opts.proof } : {}),
+          ...(this.opts.cid ? { cid: this.opts.cid } : {}),
           protocol: PROTOCOL_VERSION,
         }),
       );

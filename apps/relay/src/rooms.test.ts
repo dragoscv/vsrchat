@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { RoomRegistry, type RoomMember } from './rooms.js';
 
 let pidSeq = 0;
-function member(role: 'ext' | 'pwa'): RoomMember {
+function member(role: 'ext' | 'pwa', cid?: string): RoomMember {
   // socket is unused by the registry logic under test.
-  return { socket: {} as never, role, githubId: '1', pid: `pid-${pidSeq++}` };
+  return { socket: {} as never, role, githubId: '1', pid: `pid-${pidSeq++}`, cid };
 }
 
 describe('RoomRegistry', () => {
@@ -22,10 +22,10 @@ describe('RoomRegistry', () => {
     expect(res).toEqual({ ok: false, reason: 'room-full' });
   });
 
-  it('evicts a stale same-role member on rejoin', () => {
+  it('evicts a stale connection from the same client id (cid) on rejoin', () => {
     const r = new RoomRegistry(4);
-    const a = member('ext');
-    const b = member('ext');
+    const a = member('ext', 'win-1');
+    const b = member('ext', 'win-1');
     r.join('room-1', a);
     const res = r.join('room-1', b);
     expect(res.ok).toBe(true);
@@ -35,12 +35,21 @@ describe('RoomRegistry', () => {
 
   it('allows multiple phones (pwa) without eviction', () => {
     const r = new RoomRegistry(9);
-    r.join('room-1', member('ext'));
-    const p1 = r.join('room-1', member('pwa'));
-    const p2 = r.join('room-1', member('pwa'));
+    r.join('room-1', member('ext', 'win-1'));
+    const p1 = r.join('room-1', member('pwa', 'phone-1'));
+    const p2 = r.join('room-1', member('pwa', 'phone-2'));
     expect(p1.ok && p2.ok).toBe(true);
     if (p2.ok) expect(p2.evicted).toEqual([]);
     expect(r.count('room-1')).toBe(3); // ext + 2 phones
+  });
+
+  it('allows multiple extension windows (different cids)', () => {
+    const r = new RoomRegistry(9);
+    const w1 = r.join('room-1', member('ext', 'win-1'));
+    const w2 = r.join('room-1', member('ext', 'win-2'));
+    expect(w1.ok && w2.ok).toBe(true);
+    if (w2.ok) expect(w2.evicted).toEqual([]);
+    expect(r.count('room-1')).toBe(2); // two windows coexist
   });
 
   it('returns other members only', () => {

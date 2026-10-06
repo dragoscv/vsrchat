@@ -92,6 +92,11 @@
           "default": true,
           "description": "Mirror your real Copilot Chat sessions (read-only) so you can view them on the phone."
         },
+        "vsrchat.ownWorkspaceOnly": {
+          "type": "boolean",
+          "default": true,
+          "description": "Only report sessions for THIS window's workspace. With one connected window per open VS Code, your phone sees exactly your open workspaces. Turn off to report every workspace's sessions on this machine."
+        },
         "vsrchat.allowRemoteToolApproval": {
           "type": "boolean",
           "default": true,

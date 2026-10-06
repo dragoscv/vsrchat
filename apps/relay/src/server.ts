@@ -110,7 +110,13 @@ wss.on('connection', (ws: WebSocket) => {
         }
 
         const pid = randomUUID();
-        const member: RoomMember = { socket: ws, role: f.role as Peer, githubId: identity.id, pid };
+        const member: RoomMember = {
+          socket: ws,
+          role: f.role as Peer,
+          githubId: identity.id,
+          pid,
+          cid: f.cid,
+        };
         const result = rooms.join(f.room, member);
         if (!result.ok) return fail(ws, result.reason, 'Could not join room.');
 

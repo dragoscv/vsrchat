@@ -7,6 +7,8 @@ export interface RoomMember {
   githubId: string;
   /** Stable per-connection peer id (assigned by the server on join). */
   pid: string;
+  /** Stable client id (per VS Code window / per phone) for ghost eviction. */
+  cid?: string;
   /** Optional display label (e.g. device name). */
   label?: string;
 }
@@ -45,13 +47,14 @@ export class RoomRegistry {
       set = new Set();
       this.rooms.set(room, set);
     }
-    // The extension (`ext`) is single per room, so a new ext replaces a stale
-    // one (reconnect/re-pair ghost). Phones (`pwa`) are multi-device: many can
-    // join the same room, so we do NOT evict other phones.
+    // Multi-device on BOTH sides: many phones (one per device) and many
+    // extensions (one per open VS Code window, all sharing the same profile
+    // pairing). We evict only a prior connection from the SAME window/device,
+    // identified by a stable client id (`cid`), to clear reconnect ghosts.
     const evicted: RoomMember[] = [];
-    if (member.role === 'ext') {
+    if (member.cid) {
       for (const m of set) {
-        if (m.role === 'ext') {
+        if (m.cid === member.cid) {
           evicted.push(m);
           set.delete(m);
         }

@@ -11,6 +11,27 @@ import type {
 } from '@vsrchat/protocol';
 import type { RelayStatus } from './relay-client';
 
+export type SortKey = 'recent' | 'name' | 'messages';
+export interface ListPrefs {
+  search: string;
+  sortKey: SortKey;
+  sortDir: 'asc' | 'desc';
+  showAllWorkspaces: boolean;
+  filterSource: 'all' | 'managed' | 'mirror';
+  filterUnread: boolean;
+  pinned: string[];
+  manualOrder: string[];
+}
+
+/** A connected VS Code window (one extension peer). */
+export interface WindowPeer {
+  pid: string;
+  workspace?: string;
+  workspaceId?: string;
+  vscodeVersion?: string;
+  extVersion?: string;
+}
+
 interface VsrState {
   status: RelayStatus | 'idle';
   pcOnline: boolean;
@@ -28,10 +49,20 @@ interface VsrState {
   pcInfo?: { machine: string; vscodeVersion: string; extVersion: string };
   /** Session ids with unread activity (delta arrived while not active). */
   unread: Record<string, boolean>;
+  /** Connected VS Code windows, keyed by peer id. */
+  windows: Record<string, WindowPeer>;
+  /** Which window owns each session id (for routing requests). */
+  owners: Record<string, string>;
+  /** Sessions currently being fetched (skeletons). */
+  loadingDetail: Record<string, boolean>;
+  /** True once the first snapshot has arrived. */
+  loadedOnce: boolean;
+  /** Persisted list UI preferences. */
+  prefs: ListPrefs;
 
   setStatus: (s: RelayStatus | 'idle') => void;
   setPcOnline: (online: boolean) => void;
-  setSessions: (s: SessionSummary[]) => void;
+  setSessions: (s: SessionSummary[], ownerPid?: string) => void;
   setDetail: (d: SessionDetail) => void;
   setModels: (m: ModelInfo[]) => void;
   setAgents: (a: AgentInfo[]) => void;
@@ -46,6 +77,35 @@ interface VsrState {
   setPcInfo: (info: { machine: string; vscodeVersion: string; extVersion: string }) => void;
   removeSession: (id: string) => void;
   clearUnread: (id: string) => void;
+  addWindow: (pid: string, info?: Partial<WindowPeer>) => void;
+  removeWindow: (pid: string) => void;
+  setLoadingDetail: (id: string, loading: boolean) => void;
+  setPrefs: (p: Partial<ListPrefs>) => void;
+  togglePin: (id: string) => void;
+  reorderSessions: (orderedIds: string[]) => void;
+}
+
+const PREFS_KEY = 'vsrchat.listprefs.v1';
+const defaultPrefs: ListPrefs = {
+  search: '',
+  sortKey: 'recent',
+  sortDir: 'desc',
+  showAllWorkspaces: false,
+  filterSource: 'all',
+  filterUnread: false,
+  pinned: [],
+  manualOrder: [],
+};
+function loadPrefs(): ListPrefs {
+  if (typeof localStorage === 'undefined') return defaultPrefs;
+  try {
+    return { ...defaultPrefs, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') };
+  } catch {
+    return defaultPrefs;
+  }
+}
+function persistPrefs(p: ListPrefs): void {
+  if (typeof localStorage !== 'undefined') localStorage.setItem(PREFS_KEY, JSON.stringify(p));
 }
 
 export const useVsr = create<VsrState>((set) => ({
@@ -59,15 +119,77 @@ export const useVsr = create<VsrState>((set) => ({
   tabs: [],
   files: {},
   unread: {},
+  windows: {},
+  owners: {},
+  loadingDetail: {},
+  loadedOnce: false,
+  prefs: loadPrefs(),
 
   setStatus: (status) => set({ status }),
   setPcOnline: (pcOnline) => set({ pcOnline }),
-  setSessions: (sessions) => set({ sessions }),
-  setDetail: (d) => set((s) => ({ details: { ...s.details, [d.id]: d } })),
+  setSessions: (incoming, ownerPid) =>
+    set((s) => {
+      // Merge: replace only the sessions owned by this window (ownerPid), keep
+      // sessions from other connected windows. Without an ownerPid (cache warm),
+      // replace everything.
+      let sessions: SessionSummary[];
+      const owners = { ...s.owners };
+      if (ownerPid) {
+        const incomingIds = new Set(incoming.map((x) => x.id));
+        // Drop previous sessions owned by this window that are no longer present.
+        sessions = s.sessions.filter((x) => s.owners[x.id] !== ownerPid || incomingIds.has(x.id));
+        const byId = new Map(sessions.map((x) => [x.id, x] as const));
+        for (const sess of incoming) {
+          byId.set(sess.id, sess);
+          owners[sess.id] = ownerPid;
+        }
+        sessions = [...byId.values()];
+      } else {
+        sessions = incoming;
+      }
+      return { sessions, owners, loadedOnce: true };
+    }),
+  setDetail: (d) =>
+    set((s) => ({
+      details: { ...s.details, [d.id]: d },
+      loadingDetail: { ...s.loadingDetail, [d.id]: false },
+    })),
   setModels: (models) => set({ models }),
   setAgents: (agents) => set({ agents }),
   addTool: (t) => set((s) => ({ pendingTools: [...s.pendingTools, t] })),
   resolveTool: (id) => set((s) => ({ pendingTools: s.pendingTools.filter((t) => t.id !== id) })),
+
+  addWindow: (pid, info) =>
+    set((s) => ({ windows: { ...s.windows, [pid]: { pid, ...s.windows[pid], ...info } } })),
+  removeWindow: (pid) =>
+    set((s) => {
+      const windows = { ...s.windows };
+      delete windows[pid];
+      return { windows };
+    }),
+  setLoadingDetail: (id, loading) =>
+    set((s) => ({ loadingDetail: { ...s.loadingDetail, [id]: loading } })),
+  setPrefs: (p) =>
+    set((s) => {
+      const prefs = { ...s.prefs, ...p };
+      persistPrefs(prefs);
+      return { prefs };
+    }),
+  togglePin: (id) =>
+    set((s) => {
+      const pinned = s.prefs.pinned.includes(id)
+        ? s.prefs.pinned.filter((x) => x !== id)
+        : [...s.prefs.pinned, id];
+      const prefs = { ...s.prefs, pinned };
+      persistPrefs(prefs);
+      return { prefs };
+    }),
+  reorderSessions: (orderedIds) =>
+    set((s) => {
+      const prefs = { ...s.prefs, manualOrder: orderedIds };
+      persistPrefs(prefs);
+      return { prefs };
+    }),
   setActive: (activeSessionId) =>
     set((s) => {
       if (!activeSessionId) return { activeSessionId };

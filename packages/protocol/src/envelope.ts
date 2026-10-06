@@ -29,6 +29,12 @@ export const RelayFrameSchema = z.discriminatedUnion('t', [
      * it instead of `auth` to prove it scanned the QR.
      */
     proof: z.string().min(1).optional(),
+    /**
+     * Stable client id (per VS Code window / per phone install). Lets the relay
+     * evict only a prior ghost connection from the SAME client on reconnect,
+     * while allowing many windows/phones to coexist.
+     */
+    cid: z.string().optional(),
     protocol: z.literal(PROTOCOL_VERSION),
   }),
   /** Relay -> peer: join accepted. */

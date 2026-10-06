@@ -34,6 +34,16 @@ body {
   min-height: 100dvh;
 }
 
+/* The app route locks the viewport; only inner regions scroll. The marketing
+   pages opt back into normal scrolling via .scroll-page on <body>. */
+html.app-locked,
+html.app-locked body {
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   color: var(--color-fg);
   font-family: var(--font-sans);
@@ -102,3 +112,37 @@ body {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ---- Skeleton loading ---- */
+@keyframes vsr-shimmer {
+  0% { background-position: -480px 0; }
+  100% { background-position: 480px 0; }
+}
+.skeleton {
+  position: relative;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  background-image: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 20%,
+    rgba(140, 130, 255, 0.12) 40%,
+    rgba(43, 212, 255, 0.08) 55%,
+    rgba(255, 255, 255, 0) 75%
+  );
+  background-size: 480px 100%;
+  background-repeat: no-repeat;
+  animation: vsr-shimmer 1.25s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+/* ---- Focus visibility (a11y) ---- */
+:focus-visible {
+  outline: 2px solid var(--color-accent-2);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ---- Utility: truncate ---- */
+.truncate-1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }

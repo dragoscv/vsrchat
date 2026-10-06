@@ -9,6 +9,17 @@ import { cacheDetail, cacheSessions, readCachedSessions } from './cache';
 import { loadPairing, type PwaPairing } from './pairing-store';
 import { useVsr } from './store';
 
+/** Stable per-install client id so the relay clears only our reconnect ghosts. */
+function getClientId(): string {
+  if (typeof localStorage === 'undefined') return 'pwa-anon';
+  let id = localStorage.getItem('vsrchat.clientId');
+  if (!id) {
+    id = 'pwa-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('vsrchat.clientId', id);
+  }
+  return id;
+}
+
 interface ConnectionApi {
   ready: boolean;
   paired: boolean;
@@ -36,23 +47,30 @@ export function ConnectionProvider({
   const store = useVsr();
 
   const handleMessage = useCallback(
-    (msg: AppMessage) => {
+    (msg: AppMessage, fromPid?: string) => {
       const m = msg as ExtMessage;
       switch (m.k) {
         case 'hello':
-          // The extension only sends `hello` AFTER it has derived the shared
-          // key, so this is the safe moment to (re)request data — avoids a race
-          // where our earlier requests arrived before the extension had the key.
+          // The extension sends `hello` AFTER it derived the shared key — the
+          // safe moment to (re)request data. Track this window as a peer and
+          // request its sessions specifically.
           store.setPcOnline(true);
           store.setPcInfo({ machine: m.machine, vscodeVersion: m.vscodeVersion, extVersion: m.extVersion });
-          clientRef.current?.send({ k: 'sessions.list' });
-          clientRef.current?.send({ k: 'models.list' });
-          clientRef.current?.send({ k: 'agent.list' });
+          if (fromPid) store.addWindow(fromPid, { vscodeVersion: m.vscodeVersion, extVersion: m.extVersion });
+          clientRef.current?.send({ k: 'sessions.list' }, fromPid);
+          clientRef.current?.send({ k: 'models.list' }, fromPid);
+          clientRef.current?.send({ k: 'agent.list' }, fromPid);
           break;
-        case 'sessions.snapshot':
-          store.setSessions(m.sessions);
-          if (keyRef.current) void cacheSessions(keyRef.current, m.sessions);
+        case 'sessions.snapshot': {
+          store.setSessions(m.sessions, fromPid);
+          // Learn the window's workspace from its sessions.
+          if (fromPid) {
+            const w = m.sessions.find((x) => x.workspace);
+            if (w) store.addWindow(fromPid, { workspace: w.workspace, workspaceId: w.workspaceId });
+          }
+          if (keyRef.current) void cacheSessions(keyRef.current, useVsr.getState().sessions);
           break;
+        }
         case 'session.snapshot':
           store.setDetail(m.session);
           if (keyRef.current) void cacheDetail(keyRef.current, m.session);
@@ -107,17 +125,21 @@ export function ConnectionProvider({
         proof: pairingProof(pairing.salt),
         key,
         ourPublicKey: pairing.keyPair.publicKey,
+        clientId: getClientId(),
         onMessage: handleMessage,
         onStatus: (s) => {
           store.setStatus(s);
           if (s === 'peer-online') {
             store.setPcOnline(true);
+            // Greet; per-window data requests happen when each window's hello
+            // arrives (handleMessage 'hello').
             void client.send({ k: 'hello', client: 'pwa', version: '0.1.0' });
-            void client.send({ k: 'sessions.list' });
-            void client.send({ k: 'models.list' });
-            void client.send({ k: 'agent.list' });
           }
           if (s === 'peer-offline' || s === 'closed') store.setPcOnline(false);
+        },
+        onPeer: (pid, online) => {
+          if (online) store.addWindow(pid);
+          else store.removeWindow(pid);
         },
         onError: (code, message) => {
           const friendly: Record<string, string> = {
@@ -146,7 +168,14 @@ export function ConnectionProvider({
   const api: ConnectionApi = {
     ready,
     paired,
-    send: (msg) => void clientRef.current?.send(msg),
+    send: (msg) => {
+      // Route session-specific requests to the window that owns the session.
+      const anyMsg = msg as { sessionId?: string; id?: string; k?: string };
+      const sessionId =
+        anyMsg.sessionId ?? (anyMsg.k?.startsWith('session.') ? anyMsg.id : undefined);
+      const toPid = sessionId ? useVsr.getState().owners[sessionId] : undefined;
+      void clientRef.current?.send(msg, toPid);
+    },
     reconnect: () => {
       const pairing = loadPairing();
       if (pairing) void start(pairing);

@@ -5,10 +5,12 @@ import { motion } from 'motion/react';
 import { useVsr } from '@/lib/store';
 import { Composer } from './composer';
 import { FileChips } from './file-chips';
+import { ConversationSkeleton } from './skeletons';
 
 export function Conversation({ onBack }: { onBack: () => void }) {
   const activeId = useVsr((s) => s.activeSessionId);
   const detail = useVsr((s) => (activeId ? s.details[activeId] : undefined));
+  const loading = useVsr((s) => (activeId ? s.loadingDetail[activeId] : false));
   const pcOnline = useVsr((s) => s.pcOnline);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -47,7 +49,10 @@ export function Conversation({ onBack }: { onBack: () => void }) {
       </div>
 
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'grid', gap: 12, alignContent: 'start' }}>
-        {detail?.messages.map((m) => (
+        {loading && !detail ? (
+          <ConversationSkeleton />
+        ) : (
+          detail?.messages.map((m) => (
           <motion.div
             key={m.id}
             initial={{ opacity: 0, y: 8 }}
@@ -61,8 +66,9 @@ export function Conversation({ onBack }: { onBack: () => void }) {
             </div>
             {m.files && m.files.length > 0 && <FileChips files={m.files} />}
           </motion.div>
-        ))}
-        {!detail?.messages.length && (
+          ))
+        )}
+        {!loading && detail && !detail.messages.length && (
           <p style={{ color: 'var(--color-fg-dim)', fontSize: 13, textAlign: 'center' }}>
             No messages yet — say something below.
           </p>

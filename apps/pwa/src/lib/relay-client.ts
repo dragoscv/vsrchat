@@ -18,8 +18,12 @@ export interface BrowserRelayOptions {
   key: CryptoKey;
   /** Our X25519 public key, broadcast to the extension for ECDH. */
   ourPublicKey: string;
-  onMessage: (msg: AppMessage) => void;
+  /** Stable per-install client id (ghost eviction on reconnect). */
+  clientId?: string;
+  onMessage: (msg: AppMessage, fromPid?: string) => void;
   onStatus: (status: RelayStatus) => void;
+  /** An extension window connected/disconnected (pid + online). */
+  onPeer?: (pid: string, online: boolean) => void;
   /** Surface a relay-level error (code + human message) to the UI. */
   onError?: (code: string, message: string) => void;
 }
@@ -59,6 +63,7 @@ export class BrowserRelayClient {
           role: 'pwa',
           ...(this.opts.authToken ? { auth: this.opts.authToken } : {}),
           ...(this.opts.proof ? { proof: this.opts.proof } : {}),
+          ...(this.opts.clientId ? { cid: this.opts.clientId } : {}),
           protocol: PROTOCOL_VERSION,
         }),
       );
@@ -100,6 +105,8 @@ export class BrowserRelayClient {
       // Only care about the EXTENSION peer. Other phones (role 'pwa') joining or
       // leaving must not change our PC-connection state.
       if (obj.role && obj.role !== 'ext') return;
+      const pid = (parsed as { pid?: string }).pid;
+      if (pid) this.opts.onPeer?.(pid, !!obj.online);
       if (obj.online) this.sendKeyExchange();
       return this.opts.onStatus(obj.online ? 'peer-online' : 'peer-offline');
     }
@@ -125,7 +132,7 @@ export class BrowserRelayClient {
           nonce: env.data.nonce,
           ciphertext: env.data.ciphertext,
         });
-        this.opts.onMessage(JSON.parse(plaintext) as AppMessage);
+        this.opts.onMessage(JSON.parse(plaintext) as AppMessage, env.data.pid);
       } catch {
         this.opts.onStatus('error');
       }
@@ -144,7 +151,7 @@ export class BrowserRelayClient {
     );
   }
 
-  async send(msg: AppMessage): Promise<void> {
+  async send(msg: AppMessage, toPid?: string): Promise<void> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     const sealed = await seal(this.opts.key, JSON.stringify(msg));
     const env: SealedEnvelope = {
@@ -154,6 +161,7 @@ export class BrowserRelayClient {
       nonce: sealed.nonce,
       ciphertext: sealed.ciphertext,
       seq: this.seq++,
+      ...(toPid ? { to: toPid } : {}),
     };
     this.ws.send(JSON.stringify(env));
   }

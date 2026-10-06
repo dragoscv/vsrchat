@@ -80,10 +80,12 @@ export class SessionStore {
   }
 
   /** Read all mirrored sessions (summaries only). */
-  listSummaries(): SessionSummary[] {
+  listSummaries(onlyActiveWorkspace = false): SessionSummary[] {
     const out: SessionSummary[] = [];
     const activeId = this.activeWorkspaceId();
     for (const src of this.chatSessionSources()) {
+      // When scoped, only this window's own workspace sessions are reported.
+      if (onlyActiveWorkspace && (!src.workspaceId || src.workspaceId !== activeId)) continue;
       for (const file of safeReaddir(src.dir)) {
         if (!file.endsWith('.json')) continue;
         const detail = this.readFile(path.join(src.dir, file));
